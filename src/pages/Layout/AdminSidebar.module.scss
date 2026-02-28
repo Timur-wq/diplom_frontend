@@ -1,0 +1,300 @@
+// === Переменные ===
+$sidebar-width: 280px;
+$sidebar-width-collapsed: 70px;
+$primary-color: #4299e1;
+$primary-dark: #3182ce;
+$success-color: #48bb78;
+$danger-color: #f56565;
+$warning-color: #ed8936;
+$text-primary: #1a202c;
+$text-secondary: #718096;
+$text-muted: #a0aec0;
+$bg-primary: #ffffff;
+$bg-secondary: #f7fafc;
+$bg-hover: #edf2f7;
+$border-color: #e2e8f0;
+$shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+$shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+$transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+$breakpoint-mobile: 768px;
+
+// === Overlay для мобильной версии ===
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  opacity: 0;
+  animation: fadeIn 0.3s forwards;
+  
+  @media (min-width: $breakpoint-mobile) {
+    display: none;
+  }
+}
+
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+// === Sidebar ===
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: $sidebar-width;
+  background: $bg-primary;
+  border-right: 1px solid $border-color;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  transition: $transition;
+  box-shadow: $shadow-lg;
+  
+  @media (max-width: $breakpoint-mobile) {
+    transform: translateX(-100%);
+    
+    &.open {
+      transform: translateX(0);
+    }
+  }
+}
+
+// === Логотип ===
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid $border-color;
+  background: linear-gradient(135deg, $primary-color 0%, $primary-dark 100%);
+  color: white;
+  
+  .logoIcon {
+    font-size: 28px;
+  }
+  
+  .logoText {
+    font-size: 18px;
+    font-weight: 700;
+    flex: 1;
+  }
+  
+  .closeBtn {
+    display: none;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: 20px;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: $transition;
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    
+    @media (max-width: $breakpoint-mobile) {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+}
+
+// === Информация о пользователе ===
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid $border-color;
+  background: $bg-secondary;
+}
+
+.userAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, $primary-color 0%, $primary-dark 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 600;
+  box-shadow: $shadow;
+}
+
+.userDetails {
+  flex: 1;
+  min-width: 0;
+}
+
+.userName {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userRole {
+  font-size: 12px;
+  color: $text-secondary;
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+// === Навигация ===
+.nav {
+  flex: 1;
+  padding: 16px 12px;
+  overflow-y: auto;
+  
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: $bg-secondary;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: $border-color;
+    border-radius: 3px;
+    
+    &:hover {
+      background: $text-muted;
+    }
+  }
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 4px;
+  border-radius: 10px;
+  color: $text-secondary;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: $transition;
+  position: relative;
+  
+  &:hover {
+    background: $bg-hover;
+    color: $text-primary;
+    transform: translateX(4px);
+  }
+  
+  &.active {
+    background: linear-gradient(135deg, rgba(66, 153, 225, 0.1) 0%, rgba(66, 153, 225, 0.05) 100%);
+    color: $primary-color;
+    font-weight: 600;
+    
+    .navIcon {
+      transform: scale(1.1);
+    }
+  }
+  
+  .navIcon {
+    font-size: 20px;
+    transition: $transition;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+  }
+  
+  .navLabel {
+    flex: 1;
+  }
+  
+  .activeIndicator {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 24px;
+    background: $primary-color;
+    border-radius: 0 4px 4px 0;
+  }
+}
+
+// === Footer с кнопкой выхода ===
+.footer {
+  padding: 16px;
+  border-top: 1px solid $border-color;
+}
+
+.logoutBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, $danger-color 0%, #e53e3e 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: $transition;
+  box-shadow: 0 4px 12px rgba(245, 101, 101, 0.3);
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(245, 101, 101, 0.4);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+  
+  .logoutIcon {
+    font-size: 18px;
+  }
+}
+
+// === Адаптивность ===
+@media (max-width: $breakpoint-mobile) {
+  .sidebar {
+    width: 280px;
+    box-shadow: $shadow-lg;
+  }
+  
+  .userInfo {
+    padding: 16px 20px;
+  }
+  
+  .userAvatar {
+    width: 42px;
+    height: 42px;
+    font-size: 18px;
+  }
+}
+
+// === Анимации ===
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
