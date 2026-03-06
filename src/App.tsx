@@ -10,6 +10,8 @@ import { UserRole } from './types/auth';
 import RequestsAdmin from './pages/Admin/Request/RequestAdmin';
 import Dashboard from './pages/Admin/Dashboard/Dashboard';
 import AdminLayout from './pages/Layout/AdminLayout';
+import DiagnosticActForm from './pages/ServiceIngeneer/DiagnosticActForm';
+
 
 function App() {
   return (
@@ -18,6 +20,7 @@ function App() {
         <Route path="/register" element={<Registration />} />
         <Route path="/login" element={<Login />} />
         <Route path="/repairRequest" element={<RequestForm/>}/>
+        <Route path='/act' element={<DiagnosticActForm/>}/>
         {/* другие маршруты */}
         {/* 🔥 Только для диспетчера (админа) - Управление заявками */}
         {/* 🔥 Админ-панель с Layout */}
