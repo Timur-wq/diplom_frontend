@@ -6,6 +6,16 @@ export interface SpareItem {
   unit: string;
 }
 
+// ✅ Добавьте этот интерфейс
+export interface WorkItem {
+  id?: number;
+  workCode: number;
+  workName: string;
+  description?: string;
+  estimatedTime?: string;
+  estimatedCost?: number;
+}
+
 export interface DiagnosticAct {
   requestId: number;
   diagnosticDate: string;
@@ -20,6 +30,9 @@ export interface DiagnosticAct {
   
   // Требуемые ЗИП
   requiredSpares: SpareItem[];
+  
+  // ✅ Требуемые работы (ДОБАВЛЕНО)
+  requiredWorks: WorkItem[];
   
   // Рекомендации
   recommendations: string;
@@ -52,5 +65,6 @@ export interface DiagnosticErrors {
   testResults?: string;
   recommendations?: string;
   requiredSpares?: string;
+  requiredWorks?: string;  // ✅ ДОБАВЛЕНО
   status?: string;
 }

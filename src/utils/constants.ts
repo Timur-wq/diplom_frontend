@@ -14,7 +14,7 @@ export const enum InputFieldMessages{
    RequireSpecPass="Должен быть хотя бы один специальный символ (!@#$%^&* и т.д.)",
    ConfirmPass="Подтвердите пароль",
    PassAreNotSimilar="Пароли не совпадают",
-
+    Hello="Hello"
 }
 
 /**

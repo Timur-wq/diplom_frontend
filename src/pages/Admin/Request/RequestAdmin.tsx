@@ -56,29 +56,117 @@ const RequestsAdmin: React.FC = () => {
     svtType: ''
   });
 
+  const [assignModal, setAssignModal] = useState<{
+    isOpen: boolean;
+    requestId: number | null;
+    engineer: {
+      fio: string;
+      tabNumber: string;
+      specialization?: string;
+    } | null;
+  }>({
+    isOpen: false,
+    requestId: null,
+    engineer: null
+  });
+  
+  const [assigningId, setAssigningId] = useState<number | null>(null);
+
+  // ✅ Открыть модальное окно назначения
+  const handleOpenAssignModal = (requestId: number) => {
+    setAssignModal({
+      isOpen: true,
+      requestId,
+      engineer: {
+        fio: 'Иванов Иван Иванович',
+        tabNumber: '12345',
+        specialization: 'Ремонт ноутбуков и ПК'
+      }
+    });
+  };
+
+  // ✅ Закрыть модальное окно
+  const handleCloseAssignModal = () => {
+    setAssignModal({
+      isOpen: false,
+      requestId: null,
+      engineer: null
+    });
+  };
+
+  // ✅ Подтвердить назначение
+  const handleConfirmAssign = async () => {
+    if (!assignModal.requestId || !assignModal.engineer) return;
+    
+    setAssigningId(assignModal.requestId);
+    
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log('Назначение специалиста:', {
+        requestId: assignModal.requestId,
+        engineer: assignModal.engineer
+      });
+      
+      setAllRequests(prev => prev.map(req => 
+        req.id === assignModal.requestId 
+          ? { ...req, staffFio: assignModal.engineer!.fio, status: RequestStatus.InProgress }
+          : req
+      ));
+      
+      alert('✅ Специалист назначен!');
+      handleCloseAssignModal();
+      refreshData();
+      
+    } catch (error: any) {
+      console.error('Ошибка назначения:', error);
+      alert(error.message || 'Не удалось назначить специалиста');
+    } finally {
+      setAssigningId(null);
+    }
+  };
+
   // Статистика
   const [stats, setStats] = useState<Record<string, number>>({});
 
   // Загрузка заявок
   const loadRequests = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  setLoading(true);
+  setError(null);
 
-    try {
-      const response = await authService.fetchWithAuth(
-        'https://localhost:7053/api/AdminRequest'
-      );
+  try {
+    const response = await authService.fetchWithAuth(
+      'https://localhost:7053/api/AdminRequest'
+    );
 
-      if (!response.ok) throw new Error('Не удалось загрузить заявки');
+    if (!response.ok) throw new Error('Не удалось загрузить заявки');
 
-      const data: RequestDto[] = await response.json();  // ✅ ИСПРАВЛЕНО
-      setAllRequests(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка загрузки');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    const data: any[] = await response.json();
+    
+    // ✅ Конвертируем числовые статусы в строки
+    const statusMap: Record<number, RequestStatus> = {
+      0: RequestStatus.New,
+      1: RequestStatus.Accepted,
+      2: RequestStatus.Rejected,
+      3: RequestStatus.InProgress,
+      4: RequestStatus.Completed,
+      5: RequestStatus.Cancelled
+    };
+    
+    const normalizedData: RequestDto[] = data.map(item => ({
+      ...item,
+      status: typeof item.status === 'number' 
+        ? statusMap[item.status] || RequestStatus.New
+        : item.status
+    }));
+    
+    setAllRequests(normalizedData);
+  } catch (err) {
+    setError(err instanceof Error ? err.message : 'Ошибка загрузки');
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   // Загрузка статистики
   const loadStats = useCallback(async () => {
@@ -106,15 +194,13 @@ const RequestsAdmin: React.FC = () => {
     loadStats();
   }, [loadRequests, loadStats]);
 
-  // 🔥 КЛИЕНТСКАЯ ФИЛЬТРАЦИЯ (useMemo для производительности)
+  // 🔥 КЛИЕНТСКАЯ ФИЛЬТРАЦИЯ
   const filteredRequests = useMemo(() => {
     return allRequests.filter(request => {
-      // Фильтр по статусу
       if (filters.status !== 'All' && request.status !== filters.status) {
         return false;
       }
 
-      // Поиск по тексту (ФИО, модель, серийный номер)
       if (filters.searchQuery.trim()) {
         const query = filters.searchQuery.toLowerCase().trim();
         const searchableText = `${request.clientFio} ${request.model} ${request.serialNumber} ${request.svtType}`.toLowerCase();
@@ -123,7 +209,6 @@ const RequestsAdmin: React.FC = () => {
         }
       }
 
-      // Фильтр по дате (от)
       if (filters.dateFrom) {
         const fromDate = new Date(filters.dateFrom);
         const requestDate = new Date(request.createdAt);
@@ -132,17 +217,15 @@ const RequestsAdmin: React.FC = () => {
         }
       }
 
-      // Фильтр по дате (до)
       if (filters.dateTo) {
         const toDate = new Date(filters.dateTo);
-        toDate.setHours(23, 59, 59, 999); // Включить весь день
+        toDate.setHours(23, 59, 59, 999);
         const requestDate = new Date(request.createdAt);
         if (requestDate > toDate) {
           return false;
         }
       }
 
-      // Фильтр по типу СВТ
       if (filters.svtType.trim()) {
         if (!request.svtType.toLowerCase().includes(filters.svtType.toLowerCase().trim())) {
           return false;
@@ -275,7 +358,7 @@ const RequestsAdmin: React.FC = () => {
     <div className={styles.container}>
       <h1 className={styles.title}>Управление заявками</h1>
 
-      {/* Статистика (по всем данным) */}
+      {/* Статистика */}
       <div className={styles.stats}>
         <div className={styles.statCard}>
           <span className={styles.statValue}>{stats[RequestStatus.New] || 0}</span>
@@ -305,7 +388,6 @@ const RequestsAdmin: React.FC = () => {
         </div>
 
         <div className={styles.filtersGrid}>
-          {/* Поиск */}
           <div className={styles.filterField}>
             <label className={styles.filterLabel}>Поиск</label>
             <input
@@ -317,7 +399,6 @@ const RequestsAdmin: React.FC = () => {
             />
           </div>
 
-          {/* Статус */}
           <div className={styles.filterField}>
             <label className={styles.filterLabel}>Статус</label>
             <select
@@ -338,7 +419,6 @@ const RequestsAdmin: React.FC = () => {
             </select>
           </div>
 
-          {/* Тип СВТ */}
           <div className={styles.filterField}>
             <label className={styles.filterLabel}>Тип СВТ</label>
             <input
@@ -350,7 +430,6 @@ const RequestsAdmin: React.FC = () => {
             />
           </div>
 
-          {/* Дата от */}
           <div className={styles.filterField}>
             <label className={styles.filterLabel}>Дата от</label>
             <input
@@ -361,7 +440,6 @@ const RequestsAdmin: React.FC = () => {
             />
           </div>
 
-          {/* Дата до */}
           <div className={styles.filterField}>
             <label className={styles.filterLabel}>Дата до</label>
             <input
@@ -373,7 +451,6 @@ const RequestsAdmin: React.FC = () => {
           </div>
         </div>
 
-        {/* Быстрые фильтры по статусам */}
         <div className={styles.quickFilters}>
           <button
             className={`${styles.quickFilterBtn} ${filters.status === 'All' ? styles.active : ''}`}
@@ -413,7 +490,6 @@ const RequestsAdmin: React.FC = () => {
         ) : (
           filteredRequests.map((request) => (
             <div key={request.id} className={styles.requestCard}>
-              {/* Заголовок карточки */}
               <div 
                 className={styles.requestHeader}
                 onClick={() => toggleExpand(request.id)}
@@ -440,9 +516,14 @@ const RequestsAdmin: React.FC = () => {
                 </div>
               </div>
 
-              {/* Детали (аккордеон) */}
               {expandedId === request.id && (
                 <div className={styles.requestDetails}>
+                  {/* DEBUG: Показываем текущий статус */}
+                  <div style={{ background: '#fff3cd', padding: '10px', borderRadius: '8px', marginBottom: '20px' }}>
+                    <strong>DEBUG:</strong> Статус: "{request.status}" | ID: {request.id} | 
+                    Это New? {request.status === 'New' ? '✅ ДА' : '❌ НЕТ'} | 
+                    Это RequestStatus.New? {request.status === RequestStatus.New ? '✅ ДА' : '❌ НЕТ'}
+                  </div>
                   <div className={styles.detailsGrid}>
                     <div className={styles.detailItem}>
                       <label>Клиент:</label>
@@ -492,15 +573,18 @@ const RequestsAdmin: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Кнопки действий (только для новых заявок) */}
+                  {/* ✅ Кнопки действий для НОВЫХ заявок */}
                   {request.status === RequestStatus.New && (
                     <div className={styles.actionButtons}>
                       <button
                         className={styles.acceptBtn}
-                        onClick={() => handleAccept(request.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAccept(request.id);
+                        }}
                         disabled={processingId === request.id}
                       >
-                        {processingId === request.id ? '⏳' : '✓ Принять'}
+                        {processingId === request.id ? '⏳ Принятие...' : '✓ Принять'}
                       </button>
 
                       <div className={styles.rejectContainer}>
@@ -515,15 +599,49 @@ const RequestsAdmin: React.FC = () => {
                           }))}
                           disabled={processingId === request.id}
                           maxLength={500}
+                          onClick={(e) => e.stopPropagation()}
                         />
                         <button
                           className={styles.rejectBtn}
-                          onClick={() => handleReject(request.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleReject(request.id);
+                          }}
                           disabled={processingId === request.id}
                         >
-                          {processingId === request.id ? '⏳' : '✕ Отклонить'}
+                          {processingId === request.id ? '⏳ Отклонение...' : '✕ Отклонить'}
                         </button>
                       </div>
+
+                      {/* ✅ Кнопка назначения специалиста */}
+                      <button
+                        className={styles.assignBtn}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenAssignModal(request.id);
+                        }}
+                        disabled={assigningId === request.id}
+                      >
+                        {assigningId === request.id ? (
+                          <span className={styles.loading}>
+                            <span className={styles.spinner}></span>
+                            Назначение...
+                          </span>
+                        ) : (
+                          '📋 Назначить наряд на диагностику'
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ✅ Отображение назначенного специалиста */}
+                  {request.staffFio && request.status !== RequestStatus.New && (
+                    <div className={styles.assignedEngineer}>
+                      <div className={styles.engineerInfo}>
+                        <span className={styles.engineerLabel}>👷 Назначенный специалист:</span>
+                        <span className={styles.engineerFio}>{request.staffFio}</span>
+                      </div>
+                      <span className={styles.engineerTab}>Табельный номер: 12345</span>
                     </div>
                   )}
                 </div>
@@ -533,10 +651,76 @@ const RequestsAdmin: React.FC = () => {
         )}
       </div>
 
-      {/* Инфо о фильтрации */}
       {filteredRequests.length < allRequests.length && (
         <div className={styles.filterInfo}>
           Показано {filteredRequests.length} из {allRequests.length} заявок
+        </div>
+      )}
+
+      {/* ✅ Модальное окно подтверждения назначения */}
+      {assignModal.isOpen && (
+        <div className={styles.modalOverlay} onClick={handleCloseAssignModal}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>📋 Назначение наряда на диагностику</h3>
+              <button className={styles.modalClose} onClick={handleCloseAssignModal}>
+                ✕
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <p className={styles.modalText}>
+                Система автоматически подобрала специалиста для выполнения диагностики:
+              </p>
+
+              <div className={styles.engineerCard}>
+                <div className={styles.engineerAvatar}>
+                  👨‍🔧
+                </div>
+                <div className={styles.engineerDetails}>
+                  <div className={styles.engineerName}>
+                    {assignModal.engineer?.fio}
+                  </div>
+                  <div className={styles.engineerTabNumber}>
+                    Табельный номер: <strong>{assignModal.engineer?.tabNumber}</strong>
+                  </div>
+                  {assignModal.engineer?.specialization && (
+                    <div className={styles.engineerSpecialization}>
+                      Специализация: {assignModal.engineer.specialization}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className={styles.modalWarning}>
+                ⚠️ После подтверждения заявка будет переведена в статус "В работе"
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={handleCloseAssignModal}
+                disabled={assigningId !== null}
+              >
+                Отмена
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleConfirmAssign}
+                disabled={assigningId !== null}
+              >
+                {assigningId !== null ? (
+                  <span className={styles.loading}>
+                    <span className={styles.spinner}></span>
+                    Подтверждение...
+                  </span>
+                ) : (
+                  '✓ Подтвердить назначение наряда'
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

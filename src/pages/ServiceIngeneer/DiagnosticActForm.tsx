@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import { hasSQLInjection } from '../../utils/sqlInjection';
@@ -7,10 +7,11 @@ import {
   DiagnosticAct, 
   SpareItem, 
   SpareOption, 
-  DiagnosticErrors 
+  DiagnosticErrors,
+  WorkItem
 } from '../../types/diagnostic';
 
-// Моковые данные ЗИП (заменить на запрос к API)
+// Моковые данные ЗИП
 const MOCK_SPARE_OPTIONS: SpareOption[] = [
   { spareCode: 1, spareName: 'Жёсткий диск HDD 500GB', amount: 45, unit: 'шт' },
   { spareCode: 2, spareName: 'Жёсткий диск SSD 256GB', amount: 32, unit: 'шт' },
@@ -18,15 +19,26 @@ const MOCK_SPARE_OPTIONS: SpareOption[] = [
   { spareCode: 4, spareName: 'Блок питания 400W', amount: 23, unit: 'шт' },
   { spareCode: 5, spareName: 'Кулер процессора', amount: 18, unit: 'шт' },
   { spareCode: 6, spareName: 'Термопаста Arctic MX-4', amount: 12, unit: 'г' },
-  { spareCode: 7, spareName: 'Кабель питания', amount: 89, unit: 'шт' },
-  { spareCode: 8, spareName: 'Материнская плата ASUS', amount: 5, unit: 'шт' },
+];
+
+// Моковые данные работ
+const MOCK_WORK_OPTIONS: WorkItem[] = [
+  { workCode: 1, workName: 'Диагностика устройства', description: 'Полная аппаратная и программная диагностика', estimatedTime: '30 мин', estimatedCost: 500 },
+  { workCode: 2, workName: 'Замена термопасты', description: 'Замена термопасты процессора и видеокарты', estimatedTime: '1 час', estimatedCost: 800 },
+  { workCode: 3, workName: 'Чистка от пыли', description: 'Полная чистка системы охлаждения', estimatedTime: '1.5 часа', estimatedCost: 1200 },
+  { workCode: 4, workName: 'Замена жесткого диска', description: 'Установка и настройка нового HDD/SSD', estimatedTime: '2 часа', estimatedCost: 1500 },
+  { workCode: 5, workName: 'Установка операционной системы', description: 'Установка Windows/Linux с драйверами', estimatedTime: '3 часа', estimatedCost: 2000 },
+  { workCode: 6, workName: 'Замена матрицы', description: 'Замена экрана ноутбука/монитора', estimatedTime: '2 часа', estimatedCost: 2500 },
+  { workCode: 7, workName: 'Ремонт блока питания', description: 'Диагностика и ремонт БП', estimatedTime: '2 часа', estimatedCost: 1800 },
+  { workCode: 8, workName: 'Замена оперативной памяти', description: 'Установка новых модулей RAM', estimatedTime: '30 мин', estimatedCost: 500 },
 ];
 
 const DiagnosticActForm: React.FC = () => {
   const navigate = useNavigate();
   const { requestId } = useParams<{ requestId: string }>();
+  const formRef = useRef<HTMLFormElement>(null);
 
-  // Данные заявки (загрузить с бэкенда)
+  // Данные заявки
   const [requestData, setRequestData] = useState({
     clientFio: 'Иванов Иван Иванович',
     clientPhone: '+7 (999) 123-45-67',
@@ -49,6 +61,7 @@ const DiagnosticActForm: React.FC = () => {
     identifiedIssues: '',
     testResults: '',
     requiredSpares: [],
+    requiredWorks: [],
     recommendations: '',
     estimatedCost: undefined,
     estimatedTime: '',
@@ -60,74 +73,9 @@ const DiagnosticActForm: React.FC = () => {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [spareSearch, setSpareSearch] = useState('');
+  const [workSearch, setWorkSearch] = useState('');
 
-  // Валидация полей
-  // Измените тип параметра value в validateField
-const validateField = useCallback((name: string, value: string | number | SpareItem[] | undefined): string | undefined => {
-  switch (name) {
-    case 'technicianFio':
-      if (!value) return 'Укажите ФИО техника';
-      if (String(value).trim().length < 3) return 'Минимум 3 символа';
-      if (hasSQLInjection(String(value))) return 'Подозрительные символы';
-      return undefined;
-      
-    case 'technicianTabNum':
-      if (!value) return 'Укажите табельный номер';
-      if (!/^\d+$/.test(String(value))) return 'Только цифры';
-      return undefined;
-      
-    case 'externalCondition':
-      if (!value) return 'Опишите внешнее состояние';
-      if (String(value).trim().length < 10) return 'Минимум 10 символов';
-      return undefined;
-      
-    case 'identifiedIssues':
-      if (!value) return 'Укажите выявленные неисправности';
-      if (String(value).trim().length < 10) return 'Минимум 10 символов';
-      return undefined;
-      
-    case 'testResults':
-      if (!value) return 'Введите результаты тестов';
-      if (String(value).trim().length < 10) return 'Минимум 10 символов';
-      return undefined;
-      
-    case 'recommendations':
-      if (!value) return 'Дайте рекомендации';
-      if (String(value).trim().length < 10) return 'Минимум 10 символов';
-      return undefined;
-      
-    case 'requiredSpares':
-      if (formData.status === 'accepted' && (!value || (value as SpareItem[]).length === 0)) {
-        return 'Добавьте хотя бы один ЗИП или выберите "Запчасти не требуются"';
-      }
-      return undefined;
-      
-    case 'status':
-      if (!value) return 'Выберите статус';
-      if (value === 'rejected' && !formData.rejectionReason?.trim()) {
-        return 'Укажите причину отклонения';
-      }
-      return undefined;
-      
-    default:
-      return undefined;
-  }
-}, [formData.status, formData.rejectionReason]);
-
-  // Проверка валидности формы
-  const isFormValid = useMemo(() => {
-    const requiredFields = [
-      'technicianFio', 'technicianTabNum', 'externalCondition',
-      'identifiedIssues', 'testResults', 'recommendations', 'status'
-    ];
-    
-    return requiredFields.every(field => {
-      const error = validateField(field, formData[field as keyof DiagnosticAct]);
-      return !error;
-    }) && (formData.status !== 'rejected' || !!formData.rejectionReason?.trim());
-  }, [formData, validateField]);
-
-  // Обработчик изменений
+  // ✅ Обработчик изменений
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -141,12 +89,103 @@ const validateField = useCallback((name: string, value: string | number | SpareI
     }
   };
 
-  // Добавление ЗИП
+  // Валидация полей
+  const validateField = useCallback((name: string, value: string | number | SpareItem[] | WorkItem[] | undefined): string | undefined => {
+    switch (name) {
+      case 'externalCondition':
+        if (!value) return 'Опишите внешнее состояние';
+        if (String(value).trim().length < 10) return 'Минимум 10 символов';
+        return undefined;
+        
+      case 'identifiedIssues':
+        if (!value) return 'Укажите выявленные неисправности';
+        if (String(value).trim().length < 10) return 'Минимум 10 символов';
+        return undefined;
+        
+      case 'testResults':
+        if (!value) return 'Введите результаты тестов';
+        if (String(value).trim().length < 10) return 'Минимум 10 символов';
+        return undefined;
+        
+      case 'recommendations':
+        if (!value) return 'Дайте рекомендации';
+        if (String(value).trim().length < 10) return 'Минимум 10 символов';
+        return undefined;
+        
+      case 'requiredSpares':
+        if (formData.status === 'accepted' && (!value || (value as SpareItem[]).length === 0)) {
+          return 'Добавьте хотя бы один ЗИП или выберите "Запчасти не требуются"';
+        }
+        return undefined;
+
+      case 'requiredWorks':
+        if (formData.status === 'accepted' && (!value || (value as WorkItem[]).length === 0)) {
+          return 'Добавьте хотя бы одну работу';
+        }
+        return undefined;
+        
+      case 'status':
+        if (!value) return 'Выберите статус';
+        if (value === 'rejected' && !formData.rejectionReason?.trim()) {
+          return 'Укажите причину отклонения';
+        }
+        return undefined;
+        
+      default:
+        return undefined;
+    }
+  }, [formData.status, formData.rejectionReason]);
+
+  // Проверка валидности формы
+  const isFormValid = useMemo(() => {
+    const requiredFields = [
+      'externalCondition',
+      'identifiedIssues',
+      'testResults',
+      'recommendations',
+      'status'
+    ];
+    
+    return requiredFields.every(field => {
+      const error = validateField(field, formData[field as keyof DiagnosticAct]);
+      return !error;
+    }) && (formData.status !== 'rejected' || !!formData.rejectionReason?.trim());
+  }, [formData, validateField]);
+
+  // ✅ Добавление работы
+  const handleAddWork = (workItem: WorkItem) => {
+    const existing = formData.requiredWorks.find(w => w.workCode === workItem.workCode);
+    
+    if (existing) {
+      return;
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      requiredWorks: [...prev.requiredWorks, {
+        workCode: workItem.workCode,
+        workName: workItem.workName,
+        description: workItem.description,
+        estimatedTime: workItem.estimatedTime,
+        estimatedCost: workItem.estimatedCost
+      }]
+    }));
+    setWorkSearch('');
+  };
+
+  // ✅ Удаление работы
+  const handleRemoveWork = (workCode: number) => {
+    setFormData(prev => ({
+      ...prev,
+      requiredWorks: prev.requiredWorks.filter(w => w.workCode !== workCode)
+    }));
+  };
+
+  // ✅ Добавление ЗИП
   const handleAddSpare = (spareOption: SpareOption) => {
     const existing = formData.requiredSpares.find(s => s.spareCode === spareOption.spareCode);
     
     if (existing) {
-      // Увеличиваем количество
       setFormData(prev => ({
         ...prev,
         requiredSpares: prev.requiredSpares.map(s =>
@@ -156,7 +195,6 @@ const validateField = useCallback((name: string, value: string | number | SpareI
         )
       }));
     } else {
-      // Добавляем новый
       setFormData(prev => ({
         ...prev,
         requiredSpares: [...prev.requiredSpares, {
@@ -170,7 +208,7 @@ const validateField = useCallback((name: string, value: string | number | SpareI
     setSpareSearch('');
   };
 
-  // Удаление ЗИП
+  // ✅ Удаление ЗИП
   const handleRemoveSpare = (spareCode: number) => {
     setFormData(prev => ({
       ...prev,
@@ -178,7 +216,7 @@ const validateField = useCallback((name: string, value: string | number | SpareI
     }));
   };
 
-  // Изменение количества ЗИП
+  // ✅ Изменение количества ЗИП
   const handleSpareQuantityChange = (spareCode: number, quantity: number) => {
     if (quantity < 1) return;
     setFormData(prev => ({
@@ -189,7 +227,7 @@ const validateField = useCallback((name: string, value: string | number | SpareI
     }));
   };
 
-  // Фильтрация ЗИП по поиску
+  // ✅ Фильтрация ЗИП по поиску
   const filteredSpares = useMemo(() => {
     if (!spareSearch.trim()) return MOCK_SPARE_OPTIONS;
     const query = spareSearch.toLowerCase();
@@ -198,15 +236,28 @@ const validateField = useCallback((name: string, value: string | number | SpareI
     );
   }, [spareSearch]);
 
-  // Отправка формы
+  // ✅ Фильтрация работ по поиску
+  const filteredWorks = useMemo(() => {
+    if (!workSearch.trim()) return MOCK_WORK_OPTIONS;
+    const query = workSearch.toLowerCase();
+    return MOCK_WORK_OPTIONS.filter(work =>
+      work.workName.toLowerCase().includes(query) ||
+      work.description?.toLowerCase().includes(query)
+    );
+  }, [workSearch]);
+
+  // ✅ Отправка формы
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Валидация всех полей
     const newErrors: DiagnosticErrors = {};
     Object.keys(formData).forEach(key => {
-      const error = validateField(key, formData[key as keyof DiagnosticAct]);
-      if (error) newErrors[key as keyof DiagnosticErrors] = error;
+      const value = formData[key as keyof DiagnosticAct];
+      if (value !== undefined) {
+        const error = validateField(key, value);
+        if (error) newErrors[key as keyof DiagnosticErrors] = error;
+      }
     });
     
     setErrors(newErrors);
@@ -233,21 +284,9 @@ const validateField = useCallback((name: string, value: string | number | SpareI
     }
   };
 
-  // Форматирование статуса для отображения
-  const getStatusLabel = (status: string): string => {
-    const labels: Record<string, string> = {
-      pending: 'На рассмотрении',
-      accepted: 'Принято в работу',
-      rejected: 'Отклонено'
-    };
-    return labels[status] || status;
-  };
-
-  // ... импорты и начало компонента остаются без изменений ...
-
   return (
     <div className={styles.container}>
-      <form className={styles.form} onSubmit={handleSubmit}>
+      <form className={styles.form} onSubmit={handleSubmit} ref={formRef}>
         {/* Заголовок */}
         <div className={styles.header}>
           <h1 className={styles.title}>Акт диагностики №{requestId}</h1>
@@ -256,7 +295,7 @@ const validateField = useCallback((name: string, value: string | number | SpareI
           </span>
         </div>
 
-        {/* Информация о заявке (только чтение) */}
+        {/* Информация о заявке */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Информация о заявке</h2>
           <div className={styles.infoGrid}>
@@ -287,93 +326,38 @@ const validateField = useCallback((name: string, value: string | number | SpareI
           </div>
         </section>
 
-        {/* Данные техника */}
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Данные техника</h2>
-          <div className={styles.fieldsRow}>
-            <div className={styles.field}>
-              <label className={styles.label}>
-                ФИО техника <span className={styles.required}>*</span>
-              </label>
-              <input
-                type="text"
-                name="technicianFio"
-                value={formData.technicianFio}
-                onChange={handleChange}
-                onBlur={() => {
-                  setTouched(prev => ({ ...prev, technicianFio: true }));
-                  const error = validateField('technicianFio', formData.technicianFio);
-                  setErrors(prev => ({ ...prev, technicianFio: error }));
-                }}
-                className={`${styles.input} ${errors.technicianFio && touched.technicianFio ? styles.inputError : ''}`}
-                placeholder="Иванов Иван Иванович"
-                disabled={isLoading}
-              />
-              {errors.technicianFio && touched.technicianFio && (
-                <span className={styles.errorMessage}>{errors.technicianFio}</span>
-              )}
-            </div>
-            
-            <div className={styles.field}>
-              <label className={styles.label}>
-                Табельный номер <span className={styles.required}>*</span>
-              </label>
-              <input
-                type="text"
-                name="technicianTabNum"
-                value={formData.technicianTabNum}
-                onChange={handleChange}
-                onBlur={() => {
-                  setTouched(prev => ({ ...prev, technicianTabNum: true }));
-                  const error = validateField('technicianTabNum', formData.technicianTabNum);
-                  setErrors(prev => ({ ...prev, technicianTabNum: error }));
-                }}
-                className={`${styles.input} ${errors.technicianTabNum && touched.technicianTabNum ? styles.inputError : ''}`}
-                placeholder="12345"
-                maxLength={10}
-                disabled={isLoading}
-              />
-              {errors.technicianTabNum && touched.technicianTabNum && (
-                <span className={styles.errorMessage}>{errors.technicianTabNum}</span>
-              )}
-            </div>
-          </div>
-          
-          <div className={styles.fieldsRow}>
-            <div className={styles.field}>
-              <label className={styles.label}>
-                Дата диагностики <span className={styles.required}>*</span>
-              </label>
-              <input
-                type="date"
-                name="diagnosticDate"
-                value={formData.diagnosticDate}
-                onChange={handleChange}
-                className={styles.input}
-                disabled={isLoading}
-              />
-            </div>
-            
-            <div className={styles.field}>
-              <label className={styles.label}>
-                Время диагностики <span className={styles.required}>*</span>
-              </label>
-              <input
-                type="time"
-                name="diagnosticTime"
-                value={formData.diagnosticTime}
-                onChange={handleChange}
-                className={styles.input}
-                disabled={isLoading}
-              />
-            </div>
-          </div>
-        </section>
-
         {/* Результаты диагностики */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Результаты диагностики</h2>
           
+          <div className={styles.field}>
+            <label className={styles.label}>
+              Дата диагностики <span className={styles.required}>*</span>
+            </label>
+            <input
+              type="date"
+              name="diagnosticDate"
+              value={formData.diagnosticDate}
+              onChange={handleChange}
+              className={styles.input}
+              disabled={isLoading}
+            />
+          </div>
+          
+          <div className={styles.field}>
+            <label className={styles.label}>
+              Время диагностики <span className={styles.required}>*</span>
+            </label>
+            <input
+              type="time"
+              name="diagnosticTime"
+              value={formData.diagnosticTime}
+              onChange={handleChange}
+              className={styles.input}
+              disabled={isLoading}
+            />
+          </div>
+
           <div className={styles.field}>
             <label className={styles.label}>
               Внешнее состояние устройства <span className={styles.required}>*</span>
@@ -451,13 +435,110 @@ const validateField = useCallback((name: string, value: string | number | SpareI
               <span className={styles.errorMessage}>{errors.testResults}</span>
             )}
           </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>
+              Рекомендации <span className={styles.required}>*</span>
+            </label>
+            <textarea
+              name="recommendations"
+              value={formData.recommendations}
+              onChange={handleChange}
+              onBlur={() => {
+                setTouched(prev => ({ ...prev, recommendations: true }));
+                const error = validateField('recommendations', formData.recommendations);
+                setErrors(prev => ({ ...prev, recommendations: error }));
+              }}
+              className={`${styles.textarea} ${errors.recommendations && touched.recommendations ? styles.inputError : ''}`}
+              placeholder="Рекомендуемые действия по устранению неисправностей..."
+              rows={4}
+              disabled={isLoading}
+            />
+            <div className={styles.charCount}>
+              {formData.recommendations.length}/2000
+            </div>
+            {errors.recommendations && touched.recommendations && (
+              <span className={styles.errorMessage}>{errors.recommendations}</span>
+            )}
+          </div>
+        </section>
+
+        {/* Перечень необходимых работ */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Перечень необходимых работ</h2>
+          
+          {/* Поиск и добавление работ */}
+          <div className={styles.workSearch}>
+            <input
+              type="text"
+              className={styles.workSearchInput}
+              placeholder="Поиск работы..."
+              value={workSearch}
+              onChange={(e) => setWorkSearch(e.target.value)}
+              disabled={isLoading}
+              list="work-options"
+            />
+            <datalist id="work-options">
+              {MOCK_WORK_OPTIONS.map(work => (
+                <option key={work.workCode} value={work.workName} />
+              ))}
+            </datalist>
+            <button
+              type="button"
+              className={styles.addWorkBtn}
+              onClick={() => {
+                const work = MOCK_WORK_OPTIONS.find(w => w.workName === workSearch);
+                if (work) handleAddWork(work);
+              }}
+              disabled={isLoading || !workSearch.trim()}
+            >
+              + Добавить работу
+            </button>
+          </div>
+          
+          {/* Список добавленных работ */}
+          {formData.requiredWorks.length > 0 && (
+            <div className={styles.workList}>
+              {formData.requiredWorks.map((work: WorkItem) => (
+                <div key={work.workCode} className={styles.workItem}>
+                  <div className={styles.workInfo}>
+                    <span className={styles.workName}>{work.workName}</span>
+                    {work.description && (
+                      <span className={styles.workDescription}>{work.description}</span>
+                    )}
+                    {(work.estimatedTime || work.estimatedCost) && (
+                      <div className={styles.workMeta}>
+                        {work.estimatedTime && (
+                          <span className={styles.workTime}>⏱ {work.estimatedTime}</span>
+                        )}
+                        {work.estimatedCost && (
+                          <span className={styles.workCost}>💰 {work.estimatedCost} ₽</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.removeWorkBtn}
+                    onClick={() => handleRemoveWork(work.workCode)}
+                    disabled={isLoading}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {errors.requiredWorks && touched.requiredWorks && (
+            <span className={styles.errorMessage}>{errors.requiredWorks}</span>
+          )}
         </section>
 
         {/* Требуемые ЗИП */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Требуемые ЗИП</h2>
           
-          {/* Поиск и добавление */}
           <div className={styles.spareSearch}>
             <input
               type="text"
@@ -486,10 +567,9 @@ const validateField = useCallback((name: string, value: string | number | SpareI
             </button>
           </div>
           
-          {/* Список добавленных ЗИП */}
           {formData.requiredSpares.length > 0 && (
             <div className={styles.spareList}>
-              {formData.requiredSpares.map(spare => (
+              {formData.requiredSpares.map((spare: SpareItem) => (
                 <div key={spare.spareCode} className={styles.spareItem}>
                   <span className={styles.spareName}>{spare.spareName}</span>
                   <div className={styles.spareControls}>
@@ -538,7 +618,7 @@ const validateField = useCallback((name: string, value: string | number | SpareI
                 <span>Техник:</span>
                 <span className={styles.signatureValue}>{formData.technicianFio || '________________'}</span>
               </div>
-              <span className={styles.signatureHint}>Электронная подпись</span>
+              <span className={styles.signatureHint}>Электронная подпись (автоматически)</span>
             </div>
             <div className={styles.signature}>
               <div className={styles.signatureLine}>
@@ -579,6 +659,5 @@ const validateField = useCallback((name: string, value: string | number | SpareI
     </div>
   );
 };
-
 
 export default DiagnosticActForm;
