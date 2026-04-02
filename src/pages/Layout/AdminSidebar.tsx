@@ -14,12 +14,12 @@ const navItems: NavItem[] = [
   {
     path: '/admin/dashboard',
     label: 'Дашборд',
-    icon: '📊',
+    icon: '',
   },
   {
     path: '/admin/requests',
     label: 'Заявки',
-    icon: '📋',
+    icon: '',
   },
 
 ];
@@ -49,7 +49,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
       <aside className={`${styles.sidebar} ${isOpen ? styles.open : ''}`}>
         {/* Логотип */}
         <div className={styles.logo}>
-          <span className={styles.logoIcon}>🛠️</span>
+          {/* <span className={styles.logoIcon}>🛠️</span> */}
           <span className={styles.logoText}>Ремонт СВТ</span>
           <button className={styles.closeBtn} onClick={onClose}>
             ✕
@@ -101,7 +101,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
               window.location.href = '/login';
             }}
           >
-            <span className={styles.logoutIcon}>🚪</span>
+            {/* <span className={styles.logoutIcon}>🚪</span> */}
             <span className={styles.logoutLabel}>Выйти</span>
           </button>
         </div>

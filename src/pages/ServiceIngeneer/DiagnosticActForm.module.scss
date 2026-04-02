@@ -1,4 +1,4 @@
-// === Поиск и добавление работ ===
+// === Общие переменные ===
 $primary-color: #4299e1;
 $primary-dark: #3182ce;
 $success-color: #48bb78;
@@ -17,6 +17,239 @@ $transition: all 0.2s ease;
 $border-radius: 12px;
 $breakpoint-mobile: 768px;
 
+@mixin formTitle {
+  text-align: center;
+  margin-bottom: 1rem;
+  color: #333;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+@mixin inputBase {
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid $border-color;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-color;
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+  }
+
+  &:disabled {
+    background: #f5f5f5;
+    cursor: not-allowed;
+    opacity: 0.8;
+  }
+}
+
+.container {
+  max-width: 1100px;
+  margin: 24px auto;
+  padding: 20px;
+  background: $bg-tertiary;
+  min-height: calc(100vh - 50px);
+}
+
+.form {
+  background: $bg-primary;
+  padding: 30px;
+  border-radius: $border-radius;
+  box-shadow: $shadow-lg;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  @include formTitle;
+  margin: 0;
+}
+
+.requestDate {
+  color: $text-secondary;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.section {
+  background: $bg-secondary;
+  border: 1px solid $border-color;
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 20px;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  color: $text-primary;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 14px;
+}
+
+.infoItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.infoItem label {
+  color: $text-secondary;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.infoItem span,
+.description {
+  color: $text-primary;
+  font-size: 14px;
+}
+
+.description {
+  margin: 0;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #4a5568;
+  font-size: 14px;
+}
+
+.input,
+.select,
+.textarea {
+  @include inputBase;
+}
+
+.textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.inputError {
+  border-color: $danger-color;
+}
+
+.errorMessage {
+  color: $danger-color;
+  font-size: 13px;
+  margin-top: 6px;
+  animation: fadeIn 0.2s ease-in;
+}
+
+.charCount {
+  font-size: 12px;
+  color: $text-muted;
+  margin-top: 4px;
+  text-align: right;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.cancelBtn,
+.submitBtn,
+.addWorkBtn,
+.addSpareBtn {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.cancelBtn {
+  background: #e2e8f0;
+  color: #2d3748;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(66, 66, 66, 0.15);
+}
+
+.submitBtn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.submitBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+}
+
+.cancelBtn:disabled,
+.submitBtn:disabled,
+.addWorkBtn:disabled,
+.addSpareBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.required {
+  color: #d32f2f;
+  margin-left: 2px;
+}
+
+// === Поиск и добавление работ ===
 .workSearch {
   display: flex;
   gap: 12px;
@@ -27,50 +260,35 @@ $breakpoint-mobile: 768px;
   }
 }
 
-.workSearchInput {
+.spareSearch {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px; // добавил расстояние между полем и списком ЗИП
+  
+  @media (max-width: $breakpoint-mobile) {
+    flex-direction: column;
+  }
+}
+
+.workSearchInput,
+.spareSearchInput {
   flex: 1;
-  padding: 12px 14px;
-  border: 2px solid $border-color;
-  border-radius: 8px;
-  font-size: 14px;
-  box-sizing: border-box;
-  
-  &:focus {
-    outline: none;
-    border-color: $primary-color;
-  }
-  
-  &:disabled {
-    background: $bg-secondary;
-    cursor: not-allowed;
-  }
+  @include inputBase;
 }
 
-.addWorkBtn {
-  padding: 12px 24px;
-  background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+.addWorkBtn,
+.addSpareBtn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: $transition;
   white-space: nowrap;
-  
-  &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(237, 137, 54, 0.3);
-  }
-  
-  &:disabled {
-    background: $text-muted;
-    cursor: not-allowed;
-    transform: none;
-  }
 }
 
-// === Список работ ===
+.addWorkBtn:hover:not(:disabled),
+.addSpareBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+}
+
 .workList {
   display: flex;
   flex-direction: column;
@@ -86,7 +304,7 @@ $breakpoint-mobile: 768px;
   background: $bg-secondary;
   border-radius: 8px;
   border: 1px solid $border-color;
-  border-left: 4px solid #ed8936;
+  // border-left: 4px solid $warning-color;
   
   @media (max-width: $breakpoint-mobile) {
     flex-direction: column;
@@ -126,7 +344,8 @@ $breakpoint-mobile: 768px;
   font-weight: 500;
 }
 
-.removeWorkBtn {
+.removeWorkBtn,
+.removeSpareBtn {
   width: 32px;
   height: 32px;
   border: none;
@@ -147,4 +366,87 @@ $breakpoint-mobile: 768px;
     opacity: 0.5;
     cursor: not-allowed;
   }
+}
+
+.spareList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.spareItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: $bg-secondary;
+  border: 1px solid $border-color;
+  border-radius: 8px;
+}
+
+.spareName {
+  font-size: 14px;
+  color: $text-primary;
+  font-weight: 600;
+  flex: 1;
+}
+
+.spareControls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.quantityBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid $border-color;
+  background: white;
+  cursor: pointer;
+  color: $text-primary;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.quantity {
+  min-width: 70px;
+  text-align: center;
+  font-size: 14px;
+  color: $text-secondary;
+}
+
+.signatures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.signature {
+  background: $bg-primary;
+  border: 1px solid $border-color;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.signatureLine {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: $text-primary;
+  margin-bottom: 6px;
+}
+
+.signatureValue {
+  font-weight: 600;
+}
+
+.signatureHint {
+  font-size: 12px;
+  color: $text-muted;
 }

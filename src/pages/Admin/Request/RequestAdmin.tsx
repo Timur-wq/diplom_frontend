@@ -145,12 +145,12 @@ const RequestsAdmin: React.FC = () => {
     
     // ✅ Конвертируем числовые статусы в строки
     const statusMap: Record<number, RequestStatus> = {
-      0: RequestStatus.New,
-      1: RequestStatus.Accepted,
-      2: RequestStatus.Rejected,
-      3: RequestStatus.InProgress,
-      4: RequestStatus.Completed,
-      5: RequestStatus.Cancelled
+      1: RequestStatus.New,
+      2: RequestStatus.Accepted,
+      3: RequestStatus.Rejected,
+      4: RequestStatus.InProgress,
+      5: RequestStatus.Completed,
+      6: RequestStatus.Cancelled
     };
     
     const normalizedData: RequestDto[] = data.map(item => ({
@@ -346,6 +346,22 @@ const RequestsAdmin: React.FC = () => {
     return classes[status] || '';
   };
 
+  // Функция форматирования телефона
+  const formatPhone = (phone: string) => {
+    if (!phone) return '';
+    
+    // Удаляем все нецифровые символы
+    const digits = phone.replace(/\D/g, '');
+    
+    // Проверяем, что есть 11 цифр (российский формат)
+    if (digits.length !== 11) {
+      return phone; // Возвращаем как есть, если формат не совпадает
+    }
+    
+    // Форматируем: +0 (000) 000-00-00
+    return `+${digits[0]} (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9, 11)}`;
+  };
+
   if (loading) {
     return <div className={styles.loading}>Загрузка заявок...</div>;
   }
@@ -498,13 +514,7 @@ const RequestsAdmin: React.FC = () => {
                   <span className={styles.requestId}>#{request.id}</span>
                   <span className={styles.requestClient}>{request.clientFio}</span>
                   <span className={styles.requestDevice}>{request.svtType} {request.model}</span>
-                  <span className={styles.requestDate}>
-                    {new Date(request.createdAt).toLocaleDateString('ru-RU', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric'
-                    })}
-                  </span>
+
                 </div>
                 <div className={styles.requestActions}>
                   <span className={`${styles.statusBadge} ${getStatusClass(request.status)}`}>
@@ -519,11 +529,7 @@ const RequestsAdmin: React.FC = () => {
               {expandedId === request.id && (
                 <div className={styles.requestDetails}>
                   {/* DEBUG: Показываем текущий статус */}
-                  <div style={{ background: '#fff3cd', padding: '10px', borderRadius: '8px', marginBottom: '20px' }}>
-                    <strong>DEBUG:</strong> Статус: "{request.status}" | ID: {request.id} | 
-                    Это New? {request.status === 'New' ? '✅ ДА' : '❌ НЕТ'} | 
-                    Это RequestStatus.New? {request.status === RequestStatus.New ? '✅ ДА' : '❌ НЕТ'}
-                  </div>
+                  
                   <div className={styles.detailsGrid}>
                     <div className={styles.detailItem}>
                       <label>Клиент:</label>
@@ -531,7 +537,7 @@ const RequestsAdmin: React.FC = () => {
                     </div>
                     <div className={styles.detailItem}>
                       <label>Телефон:</label>
-                      <span>{request.clientPhone}</span>
+                      <span>{formatPhone(request.clientPhone)}</span>
                     </div>
                     <div className={styles.detailItem}>
                       <label>Тип СВТ:</label>
@@ -628,7 +634,7 @@ const RequestsAdmin: React.FC = () => {
                             Назначение...
                           </span>
                         ) : (
-                          '📋 Назначить наряд на диагностику'
+                          'Назначить наряд на диагностику'
                         )}
                       </button>
                     </div>
@@ -662,7 +668,7 @@ const RequestsAdmin: React.FC = () => {
         <div className={styles.modalOverlay} onClick={handleCloseAssignModal}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h3 className={styles.modalTitle}>📋 Назначение наряда на диагностику</h3>
+              <h3 className={styles.modalTitle}>Назначение наряда на диагностику</h3>
               <button className={styles.modalClose} onClick={handleCloseAssignModal}>
                 ✕
               </button>
@@ -675,7 +681,7 @@ const RequestsAdmin: React.FC = () => {
 
               <div className={styles.engineerCard}>
                 <div className={styles.engineerAvatar}>
-                  👨‍🔧
+                  И
                 </div>
                 <div className={styles.engineerDetails}>
                   <div className={styles.engineerName}>
@@ -693,7 +699,7 @@ const RequestsAdmin: React.FC = () => {
               </div>
 
               <div className={styles.modalWarning}>
-                ⚠️ После подтверждения заявка будет переведена в статус "В работе"
+                После подтверждения заявка будет переведена в статус "В работе"
               </div>
             </div>
 
@@ -716,7 +722,7 @@ const RequestsAdmin: React.FC = () => {
                     Подтверждение...
                   </span>
                 ) : (
-                  '✓ Подтвердить назначение наряда'
+                  'Подтвердить назначение наряда'
                 )}
               </button>
             </div>

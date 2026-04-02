@@ -41,10 +41,10 @@ const DiagnosticActForm: React.FC = () => {
   // Данные заявки
   const [requestData, setRequestData] = useState({
     clientFio: 'Иванов Иван Иванович',
-    clientPhone: '+7 (999) 123-45-67',
+    clientPhone: '+7 (000) 000-00-00',
     svtType: 'Ноутбук',
     model: 'ASUS X515',
-    serialNumber: 'AAA000000',
+    serialNumber: '000000000',
     description: 'Не включается, черный экран при нажатии кнопки питания',
     requestDate: '2026-02-25',
     requestTime: '01:31:05'
@@ -509,10 +509,10 @@ const DiagnosticActForm: React.FC = () => {
                     {(work.estimatedTime || work.estimatedCost) && (
                       <div className={styles.workMeta}>
                         {work.estimatedTime && (
-                          <span className={styles.workTime}>⏱ {work.estimatedTime}</span>
+                          <span className={styles.workTime}>{work.estimatedTime}</span>
                         )}
                         {work.estimatedCost && (
-                          <span className={styles.workCost}>💰 {work.estimatedCost} ₽</span>
+                          <span className={styles.workCost}>{work.estimatedCost} ₽</span>
                         )}
                       </div>
                     )}
@@ -610,7 +610,7 @@ const DiagnosticActForm: React.FC = () => {
         </section>
 
         {/* Подписи */}
-        <section className={styles.section}>
+        {/* <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Подписи</h2>
           <div className={styles.signatures}>
             <div className={styles.signature}>
@@ -628,7 +628,7 @@ const DiagnosticActForm: React.FC = () => {
               <span className={styles.signatureHint}>Подпись при получении</span>
             </div>
           </div>
-        </section>
+        </section> */}
 
         {/* Кнопки действий */}
         <div className={styles.actions}>

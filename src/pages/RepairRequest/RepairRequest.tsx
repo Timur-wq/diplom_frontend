@@ -387,9 +387,6 @@ const RequestForm: React.FC = () => {
                 />
               </div>
             </div>
-            <p className={styles.dateTimeHint}>
-              ⏰ Устанавливаются автоматически
-            </p>
           </div>
 
           {/* Описание неисправности */}
