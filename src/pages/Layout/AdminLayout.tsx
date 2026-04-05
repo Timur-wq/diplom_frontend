@@ -39,7 +39,7 @@ const AdminLayout: React.FC = () => {
           <button className={styles.menuBtn} onClick={toggleSidebar}>
             {sidebarOpen ? '✕' : '☰'}
           </button>
-          <h1 className={styles.headerTitle}>Админ-панель</h1>
+          <h1 className={styles.headerTitle}>Панель диспетчера</h1>
           <div className={styles.headerSpacer} />
         </header>
 

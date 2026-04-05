@@ -11,11 +11,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  {
-    path: '/admin/dashboard',
-    label: 'Дашборд',
-    icon: '',
-  },
+
   {
     path: '/admin/requests',
     label: 'Заявки',
@@ -63,7 +59,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
           </div>
           <div className={styles.userDetails}>
             <div className={styles.userName}>{userFio || 'Пользователь'}</div>
-            <div className={styles.userRole}>{userRole || 'Гость'}</div>
+            <div className={styles.userRole}>Диспетчер</div>
           </div>
         </div>
 

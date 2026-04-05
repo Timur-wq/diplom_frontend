@@ -6,6 +6,8 @@ import {
   RefreshTokenRequest
 } from '../types/auth';
 
+import { SpareOption, WorkItem } from '../types/diagnostic';
+
 const API_URL = 'https://localhost:7053/api';
 
 // Ключи для localStorage
@@ -266,6 +268,38 @@ class AuthService {
 
     // Fallback на парсинг JWT
     return !this.isTokenExpired(token);
+  }
+
+  // 🔥 Получить список ЗИП
+  async getSpares(): Promise<SpareOption[]> {
+    const response = await this.fetchWithAuth('https://localhost:7053/api/Spare');
+    if (!response.ok) throw new Error('Не удалось загрузить список ЗИП');
+    return response.json();
+  }
+
+  // 🔥 Получить список работ
+  async getWorks(): Promise<WorkItem[]> {
+    const response = await this.fetchWithAuth('https://localhost:7053/api/Work');
+    if (!response.ok) throw new Error('Не удалось загрузить список работ');
+    return response.json();
+  }
+
+  // 🔥 Поиск ЗИП
+  async searchSpares(query: string): Promise<SpareOption[]> {
+    const response = await this.fetchWithAuth(
+      `https://localhost:7053/api/Spare/search?query=${encodeURIComponent(query)}`
+    );
+    if (!response.ok) throw new Error('Ошибка поиска ЗИП');
+    return response.json();
+  }
+
+  // 🔥 Поиск работ
+  async searchWorks(query: string): Promise<WorkItem[]> {
+    const response = await this.fetchWithAuth(
+      `https://localhost:7053/api/Work/search?query=${encodeURIComponent(query)}`
+    );
+    if (!response.ok) throw new Error('Ошибка поиска работ');
+    return response.json();
   }
 }
 

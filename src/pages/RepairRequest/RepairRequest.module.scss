@@ -1,0 +1,160 @@
+// === Миксины ===
+@mixin formTitle {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: #1f2937;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+@mixin inputBase {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 16px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+  background: #ffffff;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  }
+
+  &.inputError {
+    border-color: #ef4444;
+
+    &:focus {
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+    }
+  }
+
+  &:disabled {
+    background: #f3f4f6;
+    cursor: not-allowed;
+    opacity: 0.8;
+  }
+}
+
+// === Контейнер ===
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: #f8fafc;
+}
+
+// === Форма ===
+.form {
+  width: 100%;
+  max-width: 600px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 36px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+}
+
+.title {
+  @include formTitle;
+  margin: 0 0 30px 0;
+}
+
+.field {
+  margin-bottom: 20px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.input {
+  @include inputBase;
+}
+
+.textarea {
+  min-height: 160px;
+  resize: vertical;
+}
+
+.readonlyInput {
+  background: #f9fafb;
+}
+
+.dateTimeGroup {
+  margin-bottom: 20px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 16px;
+}
+
+.dateTimeRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.errorMessage {
+  margin-top: 8px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.charCount {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 13px;
+  text-align: right;
+}
+
+.button {
+  width: 100%;
+  padding: 14px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.2);
+    background: #1d4ed8;
+  }
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    background: #93c5fd;
+  }
+}
+
+.required {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+@media (max-width: 640px) {
+  .form {
+    padding: 24px;
+  }
+
+  .dateTimeRow {
+    grid-template-columns: 1fr;
+  }
+}

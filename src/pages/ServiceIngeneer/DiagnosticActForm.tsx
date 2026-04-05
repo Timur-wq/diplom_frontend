@@ -1,12 +1,12 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import { hasSQLInjection } from '../../utils/sqlInjection';
 import styles from './DiagnosticActForm.module.scss';
-import { 
-  DiagnosticAct, 
-  SpareItem, 
-  SpareOption, 
+import {
+  DiagnosticAct,
+  SpareItem,
+  SpareOption,
   DiagnosticErrors,
   WorkItem
 } from '../../types/diagnostic';
@@ -37,6 +37,33 @@ const DiagnosticActForm: React.FC = () => {
   const navigate = useNavigate();
   const { requestId } = useParams<{ requestId: string }>();
   const formRef = useRef<HTMLFormElement>(null);
+
+  const [spareOptions, setSpareOptions] = useState<SpareOption[]>([]);
+  const [workOptions, setWorkOptions] = useState<WorkItem[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  useEffect(() => {
+    const loadOptions = async () => {
+      try {
+        const [spares, works] = await Promise.all([
+          authService.getSpares(),
+          authService.getWorks()
+        ]);
+
+        setSpareOptions(spares);
+        setWorkOptions(works);
+      } catch (err) {
+        console.error('Ошибка загрузки данных:', err);
+        // 🔥 Фолбэк на моковые данные при ошибке
+        setSpareOptions(MOCK_SPARE_OPTIONS);
+        setWorkOptions(MOCK_WORK_OPTIONS);
+      } finally {
+        setDataLoading(false);
+      }
+    };
+
+    loadOptions();
+  }, []);
 
   // Данные заявки
   const [requestData, setRequestData] = useState({
@@ -75,6 +102,29 @@ const DiagnosticActForm: React.FC = () => {
   const [spareSearch, setSpareSearch] = useState('');
   const [workSearch, setWorkSearch] = useState('');
 
+  // 🔥 Фильтрация ЗИП (используем spareOptions из стейта)
+  const filteredSpares = useMemo(() => {
+    const source = spareOptions.length > 0 ? spareOptions : MOCK_SPARE_OPTIONS;
+
+    if (!spareSearch.trim()) return source;
+    const query = spareSearch.toLowerCase();
+    return source.filter(spare =>
+      spare.spareName.toLowerCase().includes(query)
+    );
+  }, [spareSearch, spareOptions]);
+
+  // 🔥 Фильтрация работ (используем workOptions из стейта)
+  const filteredWorks = useMemo(() => {
+    const source = workOptions.length > 0 ? workOptions : MOCK_WORK_OPTIONS;
+
+    if (!workSearch.trim()) return source;
+    const query = workSearch.toLowerCase();
+    return source.filter(work =>
+      work.workName.toLowerCase().includes(query) ||
+      work.description?.toLowerCase().includes(query)
+    );
+  }, [workSearch, workOptions]);
+
   // ✅ Обработчик изменений
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -82,7 +132,7 @@ const DiagnosticActForm: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     setTouched(prev => ({ ...prev, [name]: true }));
-    
+
     if (touched[name]) {
       const error = validateField(name, value);
       setErrors(prev => ({ ...prev, [name]: error }));
@@ -96,22 +146,22 @@ const DiagnosticActForm: React.FC = () => {
         if (!value) return 'Опишите внешнее состояние';
         if (String(value).trim().length < 10) return 'Минимум 10 символов';
         return undefined;
-        
+
       case 'identifiedIssues':
         if (!value) return 'Укажите выявленные неисправности';
         if (String(value).trim().length < 10) return 'Минимум 10 символов';
         return undefined;
-        
+
       case 'testResults':
         if (!value) return 'Введите результаты тестов';
         if (String(value).trim().length < 10) return 'Минимум 10 символов';
         return undefined;
-        
+
       case 'recommendations':
         if (!value) return 'Дайте рекомендации';
         if (String(value).trim().length < 10) return 'Минимум 10 символов';
         return undefined;
-        
+
       case 'requiredSpares':
         if (formData.status === 'accepted' && (!value || (value as SpareItem[]).length === 0)) {
           return 'Добавьте хотя бы один ЗИП или выберите "Запчасти не требуются"';
@@ -123,14 +173,14 @@ const DiagnosticActForm: React.FC = () => {
           return 'Добавьте хотя бы одну работу';
         }
         return undefined;
-        
+
       case 'status':
         if (!value) return 'Выберите статус';
         if (value === 'rejected' && !formData.rejectionReason?.trim()) {
           return 'Укажите причину отклонения';
         }
         return undefined;
-        
+
       default:
         return undefined;
     }
@@ -145,7 +195,7 @@ const DiagnosticActForm: React.FC = () => {
       'recommendations',
       'status'
     ];
-    
+
     return requiredFields.every(field => {
       const error = validateField(field, formData[field as keyof DiagnosticAct]);
       return !error;
@@ -155,11 +205,11 @@ const DiagnosticActForm: React.FC = () => {
   // ✅ Добавление работы
   const handleAddWork = (workItem: WorkItem) => {
     const existing = formData.requiredWorks.find(w => w.workCode === workItem.workCode);
-    
+
     if (existing) {
       return;
     }
-    
+
     setFormData(prev => ({
       ...prev,
       requiredWorks: [...prev.requiredWorks, {
@@ -184,7 +234,7 @@ const DiagnosticActForm: React.FC = () => {
   // ✅ Добавление ЗИП
   const handleAddSpare = (spareOption: SpareOption) => {
     const existing = formData.requiredSpares.find(s => s.spareCode === spareOption.spareCode);
-    
+
     if (existing) {
       setFormData(prev => ({
         ...prev,
@@ -227,57 +277,121 @@ const DiagnosticActForm: React.FC = () => {
     }));
   };
 
-  // ✅ Фильтрация ЗИП по поиску
-  const filteredSpares = useMemo(() => {
-    if (!spareSearch.trim()) return MOCK_SPARE_OPTIONS;
-    const query = spareSearch.toLowerCase();
-    return MOCK_SPARE_OPTIONS.filter(spare =>
-      spare.spareName.toLowerCase().includes(query)
-    );
-  }, [spareSearch]);
-
-  // ✅ Фильтрация работ по поиску
-  const filteredWorks = useMemo(() => {
-    if (!workSearch.trim()) return MOCK_WORK_OPTIONS;
-    const query = workSearch.toLowerCase();
-    return MOCK_WORK_OPTIONS.filter(work =>
-      work.workName.toLowerCase().includes(query) ||
-      work.description?.toLowerCase().includes(query)
-    );
-  }, [workSearch]);
-
   // ✅ Отправка формы
+  // ✅ Отправка формы (с детальным логированием)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Валидация всех полей
+
+    console.log(requestId);
+    console.log('🔍 НАЧАЛО ОТПРАВКИ ФОРМЫ');
+    console.log('📋 FormData:', formData);
+    console.log('🔢 RequestId из URL:', requestId);
+
+    // Валидация
     const newErrors: DiagnosticErrors = {};
-    Object.keys(formData).forEach(key => {
+    ['externalCondition', 'identifiedIssues', 'testResults', 'recommendations'].forEach(key => {
       const value = formData[key as keyof DiagnosticAct];
-      if (value !== undefined) {
-        const error = validateField(key, value);
-        if (error) newErrors[key as keyof DiagnosticErrors] = error;
-      }
+      const error = validateField(key, value);
+      if (error) newErrors[key as keyof DiagnosticErrors] = error;
     });
-    
+
     setErrors(newErrors);
-    setTouched(Object.keys(formData).reduce((acc, key) => ({ ...acc, [key]: true }), {}));
-    
-    if (!isFormValid) return;
-    
+    setTouched({
+      externalCondition: true,
+      identifiedIssues: true,
+      testResults: true,
+      recommendations: true
+    });
+
+    if (!isFormValid) {
+      console.error('❌ Валидация не пройдена:', newErrors);
+      alert('Заполните все обязательные поля');
+      return;
+    }
+
     setIsLoading(true);
-    
+
     try {
-      // TODO: Заменить на реальный API вызов
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Отправка акта диагностики:', formData);
-      
-      alert('✅ Акт диагностики успешно сохранён!');
-      navigate(`/admin/requests`);
-      
+      // Формируем запрос
+      const actRequest = {
+        taskId: Number(requestId),
+        diagnosticDate: formData.diagnosticDate,
+        externalCondition: formData.externalCondition,
+        identifiedIssues: formData.identifiedIssues,
+        testResults: formData.testResults,
+        recommendations: formData.recommendations,
+        estimatedCost: formData.estimatedCost,
+        estimatedTime: formData.estimatedTime,
+        requiredSpares: formData.requiredSpares.map(s => ({
+          spareCode: s.spareCode,
+          quantity: s.quantity
+        })),
+        requiredWorks: formData.requiredWorks.map(w => ({
+          workCode: w.workCode
+        }))
+      };
+
+      console.log('📤 ОТПРАВКА ЗАПРОСА НА СЕРВЕР');
+      console.log('📍 URL:', 'https://localhost:7053/api/DiagnosticAct');
+      console.log('📦 Request Body:', JSON.stringify(actRequest, null, 2));
+
+      // Проверяем токен
+      const token = localStorage.getItem('auth_token');
+      console.log('🔑 Token:', token ? `${token.substring(0, 20)}...` : 'НЕТ ТОКЕНА');
+
+      // 1. Создаём акт
+      const actResponse = await authService.fetchWithAuth(
+        'https://localhost:7053/api/DiagnosticAct',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
+          body: JSON.stringify(actRequest)
+        }
+      );
+
+      console.log('📥 ПОЛУЧЕН ОТВЕТ ОТ СЕРВЕРА');
+      console.log('📊 Status:', actResponse.status);
+      console.log('📊 Status Text:', actResponse.statusText);
+      console.log('📊 Headers:', Object.fromEntries(actResponse.headers.entries()));
+
+      if (!actResponse.ok) {
+        // Читаем тело ошибки
+        const errorText = await actResponse.text();
+        console.error('❌ ОШИБКА СЕРВЕРА');
+        console.error('📛 Status:', actResponse.status);
+        console.error('📛 Response:', errorText);
+
+        try {
+          const errorJson = JSON.parse(errorText);
+          throw new Error(errorJson.message || `Ошибка ${actResponse.status}`);
+        } catch {
+          throw new Error(`HTTP ${actResponse.status}: ${errorText || actResponse.statusText}`);
+        }
+      }
+
+      const actResult = await actResponse.json();
+      console.log('✅ УСПЕХ:', actResult);
+
+      // 2. Завершаем наряд
+      if (actResult.success) {
+        console.log('🔄 Завершение наряда...');
+        await authService.fetchWithAuth(
+          `https://localhost:7053/api/EngineerTask/my/${actRequest.taskId}/complete`,
+          { method: 'POST' }
+        );
+        console.log('✅ Наряд завершён');
+      }
+
+      alert('✅ Акт сохранён, наряд завершён!');
+      navigate('/engineer');
+
     } catch (error: any) {
-      console.error('Ошибка сохранения:', error);
+      console.error('========== ОШИБКА ==========', error);
+      console.error('Message:', error.message);
+      console.error('Stack:', error.stack);
       alert(error.message || 'Не удалось сохранить акт');
     } finally {
       setIsLoading(false);
@@ -329,7 +443,7 @@ const DiagnosticActForm: React.FC = () => {
         {/* Результаты диагностики */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Результаты диагностики</h2>
-          
+
           <div className={styles.field}>
             <label className={styles.label}>
               Дата диагностики <span className={styles.required}>*</span>
@@ -343,7 +457,7 @@ const DiagnosticActForm: React.FC = () => {
               disabled={isLoading}
             />
           </div>
-          
+
           <div className={styles.field}>
             <label className={styles.label}>
               Время диагностики <span className={styles.required}>*</span>
@@ -383,7 +497,7 @@ const DiagnosticActForm: React.FC = () => {
               <span className={styles.errorMessage}>{errors.externalCondition}</span>
             )}
           </div>
-          
+
           <div className={styles.field}>
             <label className={styles.label}>
               Выявленные неисправности <span className={styles.required}>*</span>
@@ -409,7 +523,7 @@ const DiagnosticActForm: React.FC = () => {
               <span className={styles.errorMessage}>{errors.identifiedIssues}</span>
             )}
           </div>
-          
+
           <div className={styles.field}>
             <label className={styles.label}>
               Результаты тестов <span className={styles.required}>*</span>
@@ -466,7 +580,7 @@ const DiagnosticActForm: React.FC = () => {
         {/* Перечень необходимых работ */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Перечень необходимых работ</h2>
-          
+
           {/* Поиск и добавление работ */}
           <div className={styles.workSearch}>
             <input
@@ -479,7 +593,7 @@ const DiagnosticActForm: React.FC = () => {
               list="work-options"
             />
             <datalist id="work-options">
-              {MOCK_WORK_OPTIONS.map(work => (
+              {filteredWorks.map(work => (
                 <option key={work.workCode} value={work.workName} />
               ))}
             </datalist>
@@ -487,7 +601,7 @@ const DiagnosticActForm: React.FC = () => {
               type="button"
               className={styles.addWorkBtn}
               onClick={() => {
-                const work = MOCK_WORK_OPTIONS.find(w => w.workName === workSearch);
+                const work = filteredWorks.find(w => w.workName === workSearch);
                 if (work) handleAddWork(work);
               }}
               disabled={isLoading || !workSearch.trim()}
@@ -495,7 +609,7 @@ const DiagnosticActForm: React.FC = () => {
               + Добавить работу
             </button>
           </div>
-          
+
           {/* Список добавленных работ */}
           {formData.requiredWorks.length > 0 && (
             <div className={styles.workList}>
@@ -529,7 +643,7 @@ const DiagnosticActForm: React.FC = () => {
               ))}
             </div>
           )}
-          
+
           {errors.requiredWorks && touched.requiredWorks && (
             <span className={styles.errorMessage}>{errors.requiredWorks}</span>
           )}
@@ -538,7 +652,7 @@ const DiagnosticActForm: React.FC = () => {
         {/* Требуемые ЗИП */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Требуемые ЗИП</h2>
-          
+
           <div className={styles.spareSearch}>
             <input
               type="text"
@@ -550,7 +664,7 @@ const DiagnosticActForm: React.FC = () => {
               list="spare-options"
             />
             <datalist id="spare-options">
-              {MOCK_SPARE_OPTIONS.map(spare => (
+              {filteredSpares.map(spare => (
                 <option key={spare.spareCode} value={spare.spareName} />
               ))}
             </datalist>
@@ -558,7 +672,7 @@ const DiagnosticActForm: React.FC = () => {
               type="button"
               className={styles.addSpareBtn}
               onClick={() => {
-                const spare = MOCK_SPARE_OPTIONS.find(s => s.spareName === spareSearch);
+                const spare = filteredSpares.find(s => s.spareName === spareSearch);
                 if (spare) handleAddSpare(spare);
               }}
               disabled={isLoading || !spareSearch.trim()}
@@ -566,7 +680,7 @@ const DiagnosticActForm: React.FC = () => {
               + Добавить
             </button>
           </div>
-          
+
           {formData.requiredSpares.length > 0 && (
             <div className={styles.spareList}>
               {formData.requiredSpares.map((spare: SpareItem) => (
@@ -603,7 +717,7 @@ const DiagnosticActForm: React.FC = () => {
               ))}
             </div>
           )}
-          
+
           {errors.requiredSpares && touched.requiredSpares && (
             <span className={styles.errorMessage}>{errors.requiredSpares}</span>
           )}

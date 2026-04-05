@@ -11,6 +11,9 @@ import RequestsAdmin from './pages/Admin/Request/RequestAdmin';
 import Dashboard from './pages/Admin/Dashboard/Dashboard';
 import AdminLayout from './pages/Layout/AdminLayout';
 import DiagnosticActForm from './pages/ServiceIngeneer/DiagnosticActForm';
+import EngineerDashboard from './pages/ServiceIngeneer/EngineerDashboard';
+import ClientRequests from './pages/Client/ClientRequests';
+import ClientLayout from './pages/Client/ClientLayout';
 
 
 function App() {
@@ -19,8 +22,16 @@ function App() {
       <Routes>
         <Route path="/register" element={<Registration />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/repairRequest" element={<RequestForm/>}/>
-        <Route path='/act' element={<DiagnosticActForm/>}/>
+        
+        <Route path='/act' element={<DiagnosticActForm />} />
+
+        {/* Личный кабинет клиента */}
+        <Route path="/client" element={<ClientLayout />}>
+          <Route index element={<Navigate to="/client/requests" replace />} />
+          <Route path="/client/requests" element={<ClientRequests />} />
+          <Route path="/client/repairRequest" element={<RequestForm />} />
+        </Route>
+
         {/* другие маршруты */}
         {/* 🔥 Только для диспетчера (админа) - Управление заявками */}
         {/* 🔥 Админ-панель с Layout */}
@@ -34,7 +45,10 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="requests" element={<RequestsAdmin />} />
         </Route>
-        
+
+        <Route path="/engineer" element={<EngineerDashboard />} />
+        {/* Форма акта диагностики (по taskId) */}
+        <Route path="/engineer/task/:requestId/act" element={<DiagnosticActForm />} />
 
       </Routes>
     </BrowserRouter>

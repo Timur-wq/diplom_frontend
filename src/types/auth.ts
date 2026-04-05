@@ -18,7 +18,8 @@ export enum UserRole {
   Dispatcher = 'Dispatcher',
   Accountant = 'Accountant',
   OmtEmployee = 'OmtEmployee',
-  ServiceEngineer = 'ServiceEngineer'
+  ServiceEngineer = 'ServiceEngineer',
+  Client = 'Client'
 }
 
 export interface UserInfo {

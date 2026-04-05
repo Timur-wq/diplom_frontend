@@ -8,7 +8,13 @@ interface RequestDto {
   clientId: number;
   clientFio: string;
   clientPhone: string;
-  staffFio?: string;
+  
+  // ✅ Назначенный специалист
+  assignedEngineerTabNumber?: number;
+  assignedEngineerFio?: string;
+  assignedEngineerLogin?: string;
+  assignedAt?: string;  // Дата назначения наряда
+  
   status: RequestStatus;
   dateOnly: string;
   timeOnly: string;
@@ -60,8 +66,8 @@ const RequestsAdmin: React.FC = () => {
     isOpen: boolean;
     requestId: number | null;
     engineer: {
-      fio: string;
-      tabNumber: string;
+      fio?: string;
+      tabNumber?: string;
       specialization?: string;
     } | null;
   }>({
@@ -73,17 +79,47 @@ const RequestsAdmin: React.FC = () => {
   const [assigningId, setAssigningId] = useState<number | null>(null);
 
   // ✅ Открыть модальное окно назначения
-  const handleOpenAssignModal = (requestId: number) => {
-    setAssignModal({
-      isOpen: true,
-      requestId,
-      engineer: {
-        fio: 'Иванов Иван Иванович',
-        tabNumber: '12345',
-        specialization: 'Ремонт ноутбуков и ПК'
+  // ✅ Открыть модальное окно назначения с загрузкой кандидатов
+    const handleOpenAssignModal = async (requestId: number, workId: number = 1) => {
+      const request = allRequests.find(r => r.id === requestId);
+      if (!request) return;
+      
+      setAssignModal({
+        isOpen: true,
+        requestId,
+        engineer: null
+      });
+      
+      try {
+        // 🔥 Загружаем кандидатов с бэкенда
+        const response = await authService.fetchWithAuth(
+          `https://localhost:7053/api/Task/candidates/${workId}?svtModel=${encodeURIComponent(request.model)}`
+        );
+        
+        if (response.ok) {
+          const candidates = await response.json();
+          
+          if (candidates.length > 0) {
+            // Берём первого кандидата (с наименьшей загрузкой)
+            const bestCandidate = candidates[0];
+            
+            setAssignModal(prev => ({
+              ...prev,
+              engineer: {
+                fio: bestCandidate.fio,
+                tabNumber: bestCandidate.tabNumber.toString(),
+                specialization: '' // Можно добавить поле в DTO
+              }
+            }));
+          } else {
+            alert('⚠️ Нет доступных специалистов с нужной квалификацией');
+          }
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки кандидатов:', error);
+        alert('Не удалось загрузить список специалистов');
       }
-    });
-  };
+    };
 
   // ✅ Закрыть модальное окно
   const handleCloseAssignModal = () => {
@@ -94,37 +130,62 @@ const RequestsAdmin: React.FC = () => {
     });
   };
 
-  // ✅ Подтвердить назначение
-  const handleConfirmAssign = async () => {
-    if (!assignModal.requestId || !assignModal.engineer) return;
-    
-    setAssigningId(assignModal.requestId);
-    
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+  // ✅ Подтвердить назначение (реальный запрос к бэкенду)
+    const handleConfirmAssign = async () => {
+      if (!assignModal.requestId || !assignModal.engineer) return;
       
-      console.log('Назначение специалиста:', {
-        requestId: assignModal.requestId,
-        engineer: assignModal.engineer
-      });
+      setAssigningId(assignModal.requestId);
       
-      setAllRequests(prev => prev.map(req => 
-        req.id === assignModal.requestId 
-          ? { ...req, staffFio: assignModal.engineer!.fio, status: RequestStatus.InProgress }
-          : req
-      ));
-      
-      alert('✅ Специалист назначен!');
-      handleCloseAssignModal();
-      refreshData();
-      
-    } catch (error: any) {
-      console.error('Ошибка назначения:', error);
-      alert(error.message || 'Не удалось назначить специалиста');
-    } finally {
-      setAssigningId(null);
-    }
-  };
+      try {
+        // 🔥 Реальный запрос к API
+        const response = await authService.fetchWithAuth(
+          'https://localhost:7053/api/Task/assign',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              workId: 1,  // 🔴 Замените на реальный workId из заявки!
+              requestId: assignModal.requestId,
+              maxActiveOrders: 2  // Лимит активных нарядов на инженера
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Не удалось назначить наряд');
+        }
+
+        const result = await response.json();
+        
+        console.log('✅ Наряд назначен:', result);
+        
+        // 🔥 Обновляем локальный стейт с данными от сервера
+        setAllRequests(prev => prev.map(req => 
+          req.id === assignModal.requestId 
+            ? { 
+                ...req, 
+                assignedEngineerFio: result.engineerName || assignModal.engineer!.fio,
+                assignedEngineerTabNumber: result.assignedEngineerId,
+                assignedAt: result.assignedAt || new Date().toISOString(),
+                status: RequestStatus.InProgress  // Меняем статус на "В работе"
+              }
+            : req
+        ));
+        
+        alert('✅ Специалист назначен!');
+        handleCloseAssignModal();
+        refreshData();  // Перезагружаем данные с сервера
+        
+      } catch (error: any) {
+        console.error('❌ Ошибка назначения:', error);
+        alert(error.message || 'Не удалось назначить специалиста');
+      } finally {
+        setAssigningId(null);
+      }
+    };
 
   // Статистика
   const [stats, setStats] = useState<Record<string, number>>({});
@@ -157,7 +218,12 @@ const RequestsAdmin: React.FC = () => {
       ...item,
       status: typeof item.status === 'number' 
         ? statusMap[item.status] || RequestStatus.New
-        : item.status
+        : item.status,
+      
+      // ✅ Маппинг полей назначенного специалиста (если бэкенд возвращает их иначе)
+      assignedEngineerTabNumber: item.assignedEngineerTabNumber || item.serviceEngineerTabNumber,
+      assignedEngineerFio: item.assignedEngineerFio || item.assignedEngineerName,
+      assignedAt: item.assignedAt || item.taskAssignedAt
     }));
     
     setAllRequests(normalizedData);
@@ -590,7 +656,7 @@ const RequestsAdmin: React.FC = () => {
                         }}
                         disabled={processingId === request.id}
                       >
-                        {processingId === request.id ? '⏳ Принятие...' : '✓ Принять'}
+                        {processingId === request.id ? ' Принятие...' : 'Принять'}
                       </button>
 
                       <div className={styles.rejectContainer}>
@@ -615,7 +681,7 @@ const RequestsAdmin: React.FC = () => {
                           }}
                           disabled={processingId === request.id}
                         >
-                          {processingId === request.id ? '⏳ Отклонение...' : '✕ Отклонить'}
+                          {processingId === request.id ? ' Отклонение...' : 'Отклонить'}
                         </button>
                       </div>
 
@@ -624,7 +690,8 @@ const RequestsAdmin: React.FC = () => {
                         className={styles.assignBtn}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleOpenAssignModal(request.id);
+                          // workId = 1 (Диагностика) - замените на реальное значение
+                          handleOpenAssignModal(request.id, 1);
                         }}
                         disabled={assigningId === request.id}
                       >
@@ -641,13 +708,65 @@ const RequestsAdmin: React.FC = () => {
                   )}
 
                   {/* ✅ Отображение назначенного специалиста */}
-                  {request.staffFio && request.status !== RequestStatus.New && (
+                  {(request.assignedEngineerFio) && 
+                  request.status !== RequestStatus.New && (
                     <div className={styles.assignedEngineer}>
-                      <div className={styles.engineerInfo}>
-                        <span className={styles.engineerLabel}>👷 Назначенный специалист:</span>
-                        <span className={styles.engineerFio}>{request.staffFio}</span>
+                      <div className={styles.engineerHeader}>
+                        <span className={styles.engineerIcon}>👷</span>
+                        <span className={styles.engineerLabel}>Назначенный специалист:</span>
                       </div>
-                      <span className={styles.engineerTab}>Табельный номер: 12345</span>
+                      
+                      <div className={styles.engineerCard}>
+                        <div className={styles.engineerAvatar}>
+                          {request.assignedEngineerFio?.charAt(0)}
+                        </div>
+                        
+                        <div className={styles.engineerInfo}>
+                          <div className={styles.engineerName}>
+                            {request.assignedEngineerFio}
+                          </div>
+                          
+                          {request.assignedEngineerTabNumber && (
+                            <div className={styles.engineerDetail}>
+                              <span className={styles.detailLabel}>Табельный номер:</span>
+                              <span className={styles.detailValue}>{request.assignedEngineerTabNumber}</span>
+                            </div>
+                          )}
+                          
+                          {request.assignedEngineerLogin && (
+                            <div className={styles.engineerDetail}>
+                              <span className={styles.detailLabel}>Логин:</span>
+                              <span className={styles.detailValue}>{request.assignedEngineerLogin}</span>
+                            </div>
+                          )}
+                          
+                          {request.assignedAt && (
+                            <div className={styles.engineerDetail}>
+                              <span className={styles.detailLabel}>Назначен:</span>
+                              <span className={styles.detailValue}>
+                                {new Date(request.assignedAt).toLocaleString('ru-RU', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Кнопка связи (опционально) */}
+                      <button 
+                        className={styles.contactEngineerBtn}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Логика связи с инженером (чат, звонок и т.д.)
+                          alert(`Связь с ${request.assignedEngineerFio}`);
+                        }}
+                      >
+                        📞 Связаться
+                      </button>
                     </div>
                   )}
                 </div>
@@ -664,6 +783,7 @@ const RequestsAdmin: React.FC = () => {
       )}
 
       {/* ✅ Модальное окно подтверждения назначения */}
+
       {assignModal.isOpen && (
         <div className={styles.modalOverlay} onClick={handleCloseAssignModal}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -675,46 +795,57 @@ const RequestsAdmin: React.FC = () => {
             </div>
 
             <div className={styles.modalBody}>
-              <p className={styles.modalText}>
-                Система автоматически подобрала специалиста для выполнения диагностики:
-              </p>
-
-              <div className={styles.engineerCard}>
-                <div className={styles.engineerAvatar}>
-                  И
+              {!assignModal.engineer ? (
+                // 🔵 Показываем загрузку
+                <div className={styles.loadingContainer}>
+                  <div className={styles.spinner}></div>
+                  <p>Загрузка доступных специалистов...</p>
                 </div>
-                <div className={styles.engineerDetails}>
-                  <div className={styles.engineerName}>
-                    {assignModal.engineer?.fio}
-                  </div>
-                  <div className={styles.engineerTabNumber}>
-                    Табельный номер: <strong>{assignModal.engineer?.tabNumber}</strong>
-                  </div>
-                  {assignModal.engineer?.specialization && (
-                    <div className={styles.engineerSpecialization}>
-                      Специализация: {assignModal.engineer.specialization}
+              ) : (
+                // ✅ Показываем данные специалиста
+                <>
+                  <p className={styles.modalText}>
+                    Система автоматически подобрала специалиста для выполнения диагностики:
+                  </p>
+
+                  <div className={styles.engineerCard}>
+                    <div className={styles.engineerAvatar}>
+                      {assignModal.engineer.fio?.charAt(0) || 'С'}
                     </div>
-                  )}
-                </div>
-              </div>
+                    <div className={styles.engineerDetails}>
+                      <div className={styles.engineerName}>
+                        {assignModal.engineer.fio}
+                      </div>
+                      <div className={styles.engineerTabNumber}>
+                        Табельный номер: <strong>{assignModal.engineer.tabNumber}</strong>
+                      </div>
+                      {assignModal.engineer.specialization && (
+                        <div className={styles.engineerSpecialization}>
+                          Специализация: {assignModal.engineer.specialization}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-              <div className={styles.modalWarning}>
-                После подтверждения заявка будет переведена в статус "В работе"
-              </div>
+                  <div className={styles.modalWarning}>
+                    После подтверждения заявка будет переведена в статус "В работе"
+                  </div>
+                </>
+              )}
             </div>
 
             <div className={styles.modalFooter}>
               <button
                 className={styles.modalCancelBtn}
                 onClick={handleCloseAssignModal}
-                disabled={assigningId !== null}
+                disabled={assigningId !== null || !assignModal.engineer}
               >
                 Отмена
               </button>
               <button
                 className={styles.modalConfirmBtn}
                 onClick={handleConfirmAssign}
-                disabled={assigningId !== null}
+                disabled={assigningId !== null || !assignModal.engineer}
               >
                 {assigningId !== null ? (
                   <span className={styles.loading}>

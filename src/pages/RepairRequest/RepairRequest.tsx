@@ -1,6 +1,6 @@
 import React, { useState, ChangeEvent, FormEvent, useMemo } from 'react';
 import { IMaskInput } from 'react-imask';
-import styles from '../Login/login.module.scss';
+import styles from './RepairRequest.module.scss';
 import { hasSQLInjection } from '../../utils/sqlInjection';
 import { DEVICE_TYPES, DeviceTypeValue } from '../../utils/constants';
 

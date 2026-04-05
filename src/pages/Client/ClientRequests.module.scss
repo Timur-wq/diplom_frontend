@@ -1,0 +1,267 @@
+/* src/pages/Client/ClientRequests.module.scss */
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 2rem;
+  color: #333;
+  margin-bottom: 2rem;
+}
+
+/* Фильтры */
+.filtersPanel {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+}
+
+.filtersGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+  align-items: start;
+}
+
+.filterField {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  label {
+    display: block;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+  }
+  
+  input, select {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 0.75rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+    
+    &:focus {
+      outline: none;
+      border-color: #3498db;
+    }
+  }
+}
+
+.quickFilters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+.quickFilterBtn {
+  padding: 0.5rem 1rem;
+  border: 2px solid #e0e0e0;
+  background: white;
+  color: #555;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  
+  &:hover {
+    border-color: #3498db;
+    color: #3498db;
+  }
+  
+  &.active {
+    background: #3498db;
+    border-color: #3498db;
+    color: white;
+  }
+}
+
+/* Список заявок */
+.requestsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.requestCard {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.requestHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  cursor: pointer;
+  background: #f8f9fa;
+  
+  &:hover {
+    background: #f0f2f5;
+  }
+}
+
+.requestInfo {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.requestId {
+  font-weight: bold;
+  color: #3498db;
+}
+
+.requestDevice {
+  font-weight: 600;
+  color: #333;
+}
+
+.requestDate {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.requestActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.statusBadge {
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  
+  &.statusNew { background: #fff3cd; color: #856404; }
+  &.statusAccepted { background: #d1ecf1; color: #0c5460; }
+  &.statusRejected { background: #f8d7da; color: #721c24; }
+  &.statusInProgress { background: #cce5ff; color: #004085; }
+  &.statusCompleted { background: #d4edda; color: #155724; }
+  &.statusCancelled { background: #e2e3e5; color: #383d41; }
+}
+
+.expandIcon {
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.requestDetails {
+  padding: 1.5rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.detailItem {
+  label {
+    display: block;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 0.25rem;
+    font-size: 0.9rem;
+  }
+  span, p {
+    color: #333;
+  }
+}
+
+.description {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.rejectLabel {
+  color: #721c24 !important;
+}
+
+.rejectReason {
+  color: #721c24;
+  background: #f8d7da;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin: 0;
+}
+
+.assignedInfo {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #e8f5e9;
+  border-radius: 8px;
+  border-left: 4px solid #4caf50;
+  
+  label {
+    display: block;
+    font-weight: 600;
+    color: #2e7d32;
+    margin-bottom: 0.25rem;
+  }
+  span {
+    color: #1b5e20;
+  }
+}
+
+.loading, .error, .empty {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.1rem;
+  color: #666;
+}
+
+.error {
+  color: #721c24;
+  background: #f8d7da;
+  border-radius: 8px;
+}
+
+.filterInfo {
+  text-align: center;
+  padding: 1rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  .filtersGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .filtersPanel {
+    padding: 1rem;
+  }
+
+  .requestHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .requestActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

@@ -113,7 +113,10 @@ const Login: React.FC = () => {
           navigate('/omt/requests', { replace: true });
           break;
         case 'ServiceEngineer':
-          navigate('/engineer/tasks', { replace: true });
+          navigate('/engineer', { replace: true });
+          break;
+        case 'Client':
+          navigate('/client', {replace: true});
           break;
         default:
           navigate('/', { replace: true });
