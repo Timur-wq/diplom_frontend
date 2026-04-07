@@ -10,6 +10,7 @@ import {
   DiagnosticErrors,
   WorkItem
 } from '../../types/diagnostic';
+import { diagnosticActService, CreateActRequest } from '../../services/diagnosticActService';
 
 // Моковые данные ЗИП
 const MOCK_SPARE_OPTIONS: SpareOption[] = [
@@ -221,6 +222,8 @@ const DiagnosticActForm: React.FC = () => {
       }]
     }));
     setWorkSearch('');
+    console.log('➕ Работа добавлена:', workItem.workName);
+    console.log('📋 formData.requiredWorks:', formData.requiredWorks);
   };
 
   // ✅ Удаление работы
@@ -256,6 +259,9 @@ const DiagnosticActForm: React.FC = () => {
       }));
     }
     setSpareSearch('');
+
+    console.log('➕ ЗИП добавлен:', spareOption.spareName);
+    console.log('📋 formData.requiredSpares:', formData.requiredSpares);
   };
 
   // ✅ Удаление ЗИП
@@ -282,10 +288,9 @@ const DiagnosticActForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    console.log(requestId);
     console.log('🔍 НАЧАЛО ОТПРАВКИ ФОРМЫ');
-    console.log('📋 FormData:', formData);
-    console.log('🔢 RequestId из URL:', requestId);
+    console.log('📋 requestId из URL:', requestId);
+    console.log('📋 formData:', formData);
 
     // Валидация
     const newErrors: DiagnosticErrors = {};
@@ -309,19 +314,29 @@ const DiagnosticActForm: React.FC = () => {
       return;
     }
 
+    // Проверка taskId
+    const taskId = Number(requestId);
+    if (!taskId || isNaN(taskId)) {
+      console.error('❌ Неверный taskId:', requestId);
+      alert('Ошибка: некорректный ID наряда');
+      return;
+    }
+
     setIsLoading(true);
 
+    // ✅ Правильный код в handleSubmit:
+
     try {
-      // Формируем запрос
-      const actRequest = {
-        taskId: Number(requestId),
+      // 🔥 Формируем запрос в формате бэкенда
+      const actRequest: CreateActRequest = {
+        taskId: taskId,
         diagnosticDate: formData.diagnosticDate,
         externalCondition: formData.externalCondition,
         identifiedIssues: formData.identifiedIssues,
         testResults: formData.testResults,
         recommendations: formData.recommendations,
         estimatedCost: formData.estimatedCost,
-        estimatedTime: formData.estimatedTime,
+        estimatedTime: formData.estimatedTime || '',
         requiredSpares: formData.requiredSpares.map(s => ({
           spareCode: s.spareCode,
           quantity: s.quantity
@@ -331,68 +346,23 @@ const DiagnosticActForm: React.FC = () => {
         }))
       };
 
-      console.log('📤 ОТПРАВКА ЗАПРОСА НА СЕРВЕР');
-      console.log('📍 URL:', 'https://localhost:7053/api/DiagnosticAct');
-      console.log('📦 Request Body:', JSON.stringify(actRequest, null, 2));
+      console.log('📦 Отправляем запрос:', JSON.stringify(actRequest, null, 2));
 
-      // Проверяем токен
-      const token = localStorage.getItem('auth_token');
-      console.log('🔑 Token:', token ? `${token.substring(0, 20)}...` : 'НЕТ ТОКЕНА');
+      // 🔥 1. Создаём акт (он сам завершит наряд!)
+      const actResult = await diagnosticActService.createAct(actRequest);
 
-      // 1. Создаём акт
-      const actResponse = await authService.fetchWithAuth(
-        'https://localhost:7053/api/DiagnosticAct',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': token ? `Bearer ${token}` : ''
-          },
-          body: JSON.stringify(actRequest)
-        }
-      );
+      console.log('✅ Акт создан:', actResult);
 
-      console.log('📥 ПОЛУЧЕН ОТВЕТ ОТ СЕРВЕРА');
-      console.log('📊 Status:', actResponse.status);
-      console.log('📊 Status Text:', actResponse.statusText);
-      console.log('📊 Headers:', Object.fromEntries(actResponse.headers.entries()));
-
-      if (!actResponse.ok) {
-        // Читаем тело ошибки
-        const errorText = await actResponse.text();
-        console.error('❌ ОШИБКА СЕРВЕРА');
-        console.error('📛 Status:', actResponse.status);
-        console.error('📛 Response:', errorText);
-
-        try {
-          const errorJson = JSON.parse(errorText);
-          throw new Error(errorJson.message || `Ошибка ${actResponse.status}`);
-        } catch {
-          throw new Error(`HTTP ${actResponse.status}: ${errorText || actResponse.statusText}`);
-        }
-      }
-
-      const actResult = await actResponse.json();
-      console.log('✅ УСПЕХ:', actResult);
-
-      // 2. Завершаем наряд
-      if (actResult.success) {
-        console.log('🔄 Завершение наряда...');
-        await authService.fetchWithAuth(
-          `https://localhost:7053/api/EngineerTask/my/${actRequest.taskId}/complete`,
-          { method: 'POST' }
-        );
-        console.log('✅ Наряд завершён');
-      }
+      // 🔥 НЕ вызываем completeTask() - акт уже завершил наряд!
 
       alert('✅ Акт сохранён, наряд завершён!');
-      navigate('/engineer');
+      navigate('/engineer');  // Возврат в личный кабинет
 
     } catch (error: any) {
-      console.error('========== ОШИБКА ==========', error);
+      console.error('========== ОШИБКА ==========');
       console.error('Message:', error.message);
       console.error('Stack:', error.stack);
-      alert(error.message || 'Не удалось сохранить акт');
+      alert(error.message || 'Не удалось создать акт');
     } finally {
       setIsLoading(false);
     }

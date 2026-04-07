@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { authService } from '../../../services/authService';
 import styles from './RequestsAdmin.module.scss';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 // Типы
 interface RequestDto {
@@ -33,6 +34,9 @@ enum RequestStatus {
   Accepted = 'Accepted',
   Rejected = 'Rejected',
   InProgress = 'InProgress',
+  DiagnosticCompleted = 'DiagnosticCompleted', // ✅ ДОБАВЛЕНО для статуса "Диагностика завершена"
+  WaitingForClientApproval = 'WaitingForClientApproval', // ✅ ДОБАВЛЕНО для статуса "Ожидание согласования с клиентом"
+  ApprovedByClient = 'ApprovedByClient', // ✅ ДОБАВЛЕНО для статуса "Согласовано с клиентом"
   Completed = 'Completed',
   Cancelled = 'Cancelled'
 }
@@ -77,6 +81,8 @@ const RequestsAdmin: React.FC = () => {
   });
   
   const [assigningId, setAssigningId] = useState<number | null>(null);
+  const [diagnosticActs, setDiagnosticActs] = useState<Record<number, boolean>>({});
+  const navigate = useNavigate();
 
   // ✅ Открыть модальное окно назначения
   // ✅ Открыть модальное окно назначения с загрузкой кандидатов
@@ -206,12 +212,15 @@ const RequestsAdmin: React.FC = () => {
     
     // ✅ Конвертируем числовые статусы в строки
     const statusMap: Record<number, RequestStatus> = {
-      1: RequestStatus.New,
-      2: RequestStatus.Accepted,
-      3: RequestStatus.Rejected,
-      4: RequestStatus.InProgress,
-      5: RequestStatus.Completed,
-      6: RequestStatus.Cancelled
+      0: RequestStatus.New,
+      1: RequestStatus.Accepted,
+      2: RequestStatus.Rejected,
+      3: RequestStatus.InProgress,
+      4: RequestStatus.DiagnosticCompleted,
+      5: RequestStatus.WaitingForClientApproval,
+      6: RequestStatus.ApprovedByClient,
+      7: RequestStatus.Completed,
+      8: RequestStatus.Cancelled
     };
     
     const normalizedData: RequestDto[] = data.map(item => ({
@@ -313,6 +322,13 @@ const RequestsAdmin: React.FC = () => {
   // Развернуть/свернуть аккордеон
   const toggleExpand = (id: number) => {
     setExpandedId(expandedId === id ? null : id);
+    
+    // Проверяем наличие акта при развертывании
+    if (expandedId !== id) {
+      checkDiagnosticAct(id).then(hasAct => {
+        setDiagnosticActs(prev => ({ ...prev, [id]: hasAct }));
+      });
+    }
   };
 
   // Принять заявку
@@ -394,6 +410,9 @@ const RequestsAdmin: React.FC = () => {
       [RequestStatus.Accepted]: 'Принята',
       [RequestStatus.Rejected]: 'Отклонена',
       [RequestStatus.InProgress]: 'В работе',
+      [RequestStatus.DiagnosticCompleted]: 'Диагностика завершена', // ✅ Новый статус
+      [RequestStatus.WaitingForClientApproval]: 'Ожидание согласования с клиентом', // ✅ Новый статус
+      [RequestStatus.ApprovedByClient]: 'Согласовано с клиентом', // ✅ Новый статус
       [RequestStatus.Completed]: 'Завершена',
       [RequestStatus.Cancelled]: 'Отменена'
     };
@@ -406,6 +425,9 @@ const RequestsAdmin: React.FC = () => {
       [RequestStatus.Accepted]: styles.statusAccepted,
       [RequestStatus.Rejected]: styles.statusRejected,
       [RequestStatus.InProgress]: styles.statusInProgress,
+      [RequestStatus.DiagnosticCompleted]: styles.statusDiagnosticCompleted,
+      [RequestStatus.WaitingForClientApproval]: styles.statusWaitingForClientApproval,
+      [RequestStatus.ApprovedByClient]: styles.statusApprovedByClient,
       [RequestStatus.Completed]: styles.statusCompleted,
       [RequestStatus.Cancelled]: styles.statusCancelled
     };
@@ -435,6 +457,22 @@ const RequestsAdmin: React.FC = () => {
   if (error) {
     return <div className={styles.error}>Ошибка: {error}</div>;
   }
+
+  // В компоненте добавьте функцию проверки наличия акта:
+const checkDiagnosticAct = async (requestId: number) => {
+  try {
+    const response = await authService.fetchWithAuth(
+      `https://localhost:7053/api/dispatcher/DiagnosticAct/by-request/${requestId}`
+    );
+    
+    if (response.ok) {
+      return true;  // Акт существует
+    }
+    return false;
+  } catch {
+    return false;
+  }
+};
 
   return (
     <div className={styles.container}>
@@ -496,6 +534,9 @@ const RequestsAdmin: React.FC = () => {
               <option value={RequestStatus.Accepted}>Принятые</option>
               <option value={RequestStatus.Rejected}>Отклонённые</option>
               <option value={RequestStatus.InProgress}>В работе</option>
+              <option value={RequestStatus.DiagnosticCompleted}>Диагностика завершена</option>
+              <option value={RequestStatus.WaitingForClientApproval}>Ожидание согласования с клиентом</option>
+              <option value={RequestStatus.ApprovedByClient}>Согласовано с клиентом</option>
               <option value={RequestStatus.Completed}>Завершённые</option>
               <option value={RequestStatus.Cancelled}>Отменённые</option>
             </select>
@@ -703,6 +744,21 @@ const RequestsAdmin: React.FC = () => {
                         ) : (
                           'Назначить наряд на диагностику'
                         )}
+                      </button>
+                    </div>
+                  )}
+
+                  {diagnosticActs[request.id] && (
+                    <div className={styles.actionButtons}>
+                      <button
+                        className={styles.viewActBtn}
+                        onClick={() => {
+                          // 🔥 Переходим на страницу акта
+                          navigate(`/dispatcher/acts/${request.id}`, { replace: true });
+                        }}
+                        title="Просмотреть акт диагностики"
+                      >
+                        📋 Акт диагностики
                       </button>
                     </div>
                   )}

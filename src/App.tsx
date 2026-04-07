@@ -14,6 +14,8 @@ import DiagnosticActForm from './pages/ServiceIngeneer/DiagnosticActForm';
 import EngineerDashboard from './pages/ServiceIngeneer/EngineerDashboard';
 import ClientRequests from './pages/Client/ClientRequests';
 import ClientLayout from './pages/Client/ClientLayout';
+import DiagnosticActView from './pages/Admin/DiagnosticActView';
+import ClientDiagnosticActView from './pages/Client/ClientDiagnosticActView';
 
 
 function App() {
@@ -28,8 +30,9 @@ function App() {
         {/* Личный кабинет клиента */}
         <Route path="/client" element={<ClientLayout />}>
           <Route index element={<Navigate to="/client/requests" replace />} />
-          <Route path="/client/requests" element={<ClientRequests />} />
-          <Route path="/client/repairRequest" element={<RequestForm />} />
+          <Route path="requests" element={<ClientRequests />} />
+          <Route path="repairRequest" element={<RequestForm />} />
+          <Route     path="/client/acts/:actCode"     element={<ClientDiagnosticActView />} />
         </Route>
 
         {/* другие маршруты */}
@@ -45,6 +48,12 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="requests" element={<RequestsAdmin />} />
         </Route>
+
+        <Route path="/dispatcher/acts/:requestId" element={
+          <ProtectedRoute roles={[UserRole.Dispatcher]}>
+            <DiagnosticActView />
+          </ProtectedRoute>
+        } />
 
         <Route path="/engineer" element={<EngineerDashboard />} />
         {/* Форма акта диагностики (по taskId) */}

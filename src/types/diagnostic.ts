@@ -68,3 +68,40 @@ export interface DiagnosticErrors {
   requiredWorks?: string;  // ✅ ДОБАВЛЕНО
   status?: string;
 }
+
+// Для отображения акта от бэкенда
+export interface DiagnosticActDto {
+  actCode: string | number;
+  requestId: number;
+  clientFio: string;
+  clientPhone: string;
+  engineerFio: string;
+  engineerTabNum: string;
+  diagnosticDate: string;
+  diagnosticTime: string;
+  externalCondition: string;
+  identifiedIssues: string;
+  testResults: string;
+  recommendations: string;
+  estimatedCost?: number;
+  estimatedTime?: string;
+  works: Work[];
+  spares: Spare[];
+  status: string | number;
+  dispatcherComment?: string;
+  sentToClientAt?: string;
+  approvedByClientAt?: string;
+  clientComment?: string;
+}
+
+export interface Work {
+  workName: string;
+  description?: string;
+  estimatedCost?: number;
+}
+
+export interface Spare {
+  spareName: string;
+  quantity: number;
+  unit: string;
+}

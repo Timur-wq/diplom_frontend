@@ -17,6 +17,7 @@ export interface ClientRequest {
   statusChangedAt?: string;
   statusChangedByFio?: string;
   createdAt: string;
+  hasDiagnosticAct?: boolean; 
 }
 
 export enum RequestStatus {
@@ -24,9 +25,28 @@ export enum RequestStatus {
   Accepted = 'Accepted',
   Rejected = 'Rejected',
   InProgress = 'InProgress',
+  DiagnosticCompleted = 'DiagnosticCompleted',  
+  WaitingForClientApproval = 'WaitingForClientApproval', 
+  ApprovedByClient = 'ApprovedByClient',
   Completed = 'Completed',
   Cancelled = 'Cancelled'
 }
+
+// Функция для отображения статуса
+export const getRequestStatusLabel = (status: RequestStatus): string => {
+  const labels: Record<RequestStatus, string> = {
+    [RequestStatus.New]: 'Новая',
+    [RequestStatus.Accepted]: 'Принята',
+    [RequestStatus.Rejected]: 'Отклонена',
+    [RequestStatus.InProgress]: 'В работе',
+    [RequestStatus.DiagnosticCompleted]: 'Диагностика завершена',  
+    [RequestStatus.WaitingForClientApproval]: 'Ожидание согласования',  
+    [RequestStatus.ApprovedByClient]: 'Согласована клиентом', 
+    [RequestStatus.Completed]: 'Завершена',
+    [RequestStatus.Cancelled]: 'Отменена'
+  };
+  return labels[status] || status;
+};
 
 export interface ClientRequestFilters {
   status: RequestStatus | 'All';

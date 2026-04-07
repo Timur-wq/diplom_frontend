@@ -1,16 +1,18 @@
 // src/pages/Client/ClientRequests.tsx
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { clientRequestService } from '../../services/clientRequestService';
-import { ClientRequest, RequestStatus, ClientRequestFilters } from '../../types/client';
+import { ClientRequest, RequestStatus, ClientRequestFilters, getRequestStatusLabel } from '../../types/client';
 import styles from './ClientRequests.module.scss';
 
 const ClientRequests: React.FC = () => {
+  const navigate = useNavigate();
   const [requests, setRequests] = useState<ClientRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  
+
   // Фильтры
   const [filters, setFilters] = useState<ClientRequestFilters>({
     status: 'All',
@@ -72,15 +74,7 @@ const ClientRequests: React.FC = () => {
 
   // Форматирование статуса
   const getStatusLabel = (status: RequestStatus): string => {
-    const labels: Record<RequestStatus, string> = {
-      [RequestStatus.New]: 'Новая',
-      [RequestStatus.Accepted]: 'Принята',
-      [RequestStatus.Rejected]: 'Отклонена',
-      [RequestStatus.InProgress]: 'В работе',
-      [RequestStatus.Completed]: 'Завершена',
-      [RequestStatus.Cancelled]: 'Отменена'
-    };
-    return labels[status] || status;
+    return getRequestStatusLabel(status);
   };
 
   const getStatusClass = (status: RequestStatus): string => {
@@ -89,10 +83,13 @@ const ClientRequests: React.FC = () => {
       [RequestStatus.Accepted]: styles.statusAccepted,
       [RequestStatus.Rejected]: styles.statusRejected,
       [RequestStatus.InProgress]: styles.statusInProgress,
+      [RequestStatus.DiagnosticCompleted]: styles.statusCompleted,
+      [RequestStatus.WaitingForClientApproval]: styles.statusInProgress,
+      [RequestStatus.ApprovedByClient]: styles.statusCompleted,
       [RequestStatus.Completed]: styles.statusCompleted,
       [RequestStatus.Cancelled]: styles.statusCancelled
     };
-    return classes[status] || '';
+    return classes[status] || styles.statusCancelled;
   };
 
   const formatDate = (dateString: string): string => {
@@ -180,8 +177,8 @@ const ClientRequests: React.FC = () => {
             >
               {status === 'All' ? 'Все' : getStatusLabel(status as RequestStatus)}
               {' ('}
-              {status === 'All' 
-                ? requests.length 
+              {status === 'All'
+                ? requests.length
                 : requests.filter(r => r.status === status).length}
               )
             </button>
@@ -193,14 +190,14 @@ const ClientRequests: React.FC = () => {
       <div className={styles.requestsList}>
         {filteredRequests.length === 0 ? (
           <div className={styles.empty}>
-            {requests.length === 0 
-              ? 'У вас пока нет заявок' 
+            {requests.length === 0
+              ? 'У вас пока нет заявок'
               : 'По вашему фильтру заявок не найдено'}
           </div>
         ) : (
           filteredRequests.map(request => (
             <div key={request.id} className={styles.requestCard}>
-              <div 
+              <div
                 className={styles.requestHeader}
                 onClick={() => toggleExpand(request.id)}
               >
@@ -263,6 +260,28 @@ const ClientRequests: React.FC = () => {
                     <div className={styles.detailItem}>
                       <label>Статус изменён:</label>
                       <span>{formatDate(request.statusChangedAt)}</span>
+                    </div>
+                  )}
+
+                  {expandedId === request.id && (
+                    <div className={styles.requestDetails}>
+                      {/* ... остальные поля ... */}
+
+                      {/* 🔥 Кнопка просмотра акта */}
+                      {(request.status === RequestStatus.DiagnosticCompleted ||
+                        request.status === RequestStatus.WaitingForClientApproval) && (
+                          <div className={styles.actionSection}>
+                            <button
+                              className={styles.viewActBtn}
+                              onClick={(e) => {
+                                e.stopPropagation();  // 🔥 Важно: предотвращаем закрытие карточки
+                                navigate(`/client/acts/${request.id}`);
+                              }}
+                            >
+                              📋 Просмотреть акт диагностики
+                            </button>
+                          </div>
+                        )}
                     </div>
                   )}
                 </div>

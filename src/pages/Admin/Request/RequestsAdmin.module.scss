@@ -312,6 +312,24 @@ $breakpoint-mobile: 768px;
   border: 1px solid #cbd5e0;
 }
 
+.statusDiagnosticCompleted {
+  background: #e6fffa;
+  color: #0d9488;
+  border: 1px solid #5eead4;
+}
+
+.statusWaitingForClientApproval {
+  background: #fef3c7;
+  color: #d97706;
+  border: 1px solid #fcd34d;
+}
+
+.statusApprovedByClient {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
 .expandIcon {
   color: #a0aec0;
   font-size: 12px;
@@ -577,6 +595,36 @@ $breakpoint-mobile: 768px;
   
   &:disabled {
     background: #d6bcfa;
+    cursor: not-allowed;
+  }
+}
+
+.viewActBtn {
+  padding: 12px 20px;
+  background: transparent;
+  color: #5b43d1;
+  border: 1px solid rgba(91, 67, 209, 0.65);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  &:hover:not(:disabled) {
+    background: rgba(91, 67, 209, 0.08);
+    transform: translateY(-1px);
+  }
+
+  &:hover:not(:disabled) {
+    background: rgba(91, 67, 209, 0.08);
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.6;
     cursor: not-allowed;
   }
 }
