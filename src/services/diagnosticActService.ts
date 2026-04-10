@@ -1,7 +1,7 @@
 // src/services/diagnosticActService.ts
 
 import { authService } from './authService';
-import { DiagnosticAct, SpareOption, WorkItem, SpareItem } from '../types/diagnostic';
+import { DiagnosticAct, SpareOption, WorkItem, SpareItem, ProcurementResultDto } from '../types/diagnostic';
 
 const API_BASE = 'https://localhost:7053/api';
 
@@ -16,7 +16,23 @@ export interface CreateActRequest {
   estimatedCost?: number;
   estimatedTime: string;
   requiredSpares: { spareCode: number; quantity: number }[];
-  requiredWorks: { workCode: number }[];
+  requiredWorks: ActWorkRequest[];  // 🔥 Используем новый интерфейс
+}
+export interface ActWorkRequest {
+  workCode: number;
+  requiredSpares?: WorkSpareLinkRequest[];  // 🔥 Новые ЗИП для работы
+}
+
+export interface WorkSpareLinkRequest {
+  spareCode: number;
+  quantity: number;
+  isRequired?: boolean;
+}
+
+export interface CreateActResponse {
+  success: boolean;
+  message: string;
+  actCode?: number;
 }
 
 export interface CreateActResponse {
@@ -44,13 +60,12 @@ export const diagnosticActService = {
   async createAct(request: CreateActRequest): Promise<CreateActResponse> {
     console.log('📤 Запрос на создание акта:', request);
 
-    // 🔥 ПРАВИЛЬНЫЙ URL для вашего контроллера:
     const response = await authService.fetchWithAuth(
-      `https://localhost:7053/api/EngineerTask/my/${request.taskId}/diagnostic-act`,  // ✅ ЭТОТ URL!
+      `https://localhost:7053/api/EngineerTask/my/${request.taskId}/diagnostic-act`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request)
+        body: JSON.stringify(request)  // 🔥 Здесь отправляем request с requiredSpares
       }
     );
 
@@ -81,5 +96,28 @@ export const diagnosticActService = {
       const errorText = await response.text();
       throw new Error(`Не удалось завершить наряд: ${errorText}`);
     }
+  },
+
+  // 🔥 Запустить жадный алгоритм оптимизации закупок
+  async optimizeProcurement(actCode: number): Promise<ProcurementResultDto> {
+    console.log('🤖 Запрос оптимизации закупок для акта #', actCode);
+
+    const response = await authService.fetchWithAuth(
+      `https://localhost:7053/api/dispatcher/DiagnosticAct/${actCode}/optimize-procurement`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Ошибка оптимизации:', errorText);
+      throw new Error(errorText || `Ошибка ${response.status}`);
+    }
+
+    const result: ProcurementResultDto = await response.json();
+    console.log('✅ Результат оптимизации:', result);
+    return result;
   }
 };

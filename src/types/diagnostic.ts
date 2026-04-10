@@ -14,6 +14,16 @@ export interface WorkItem {
   description?: string;
   estimatedTime?: string;
   estimatedCost?: number;
+  // 🔥 Добавьте это поле:
+  requiredSpares?: WorkSpareLink[];  // Опциональное поле
+}
+
+export interface WorkSpareLink {
+  spareCode: number;
+  spareName: string;
+  quantity: number;
+  isRequired: boolean;
+  unit: string;
 }
 
 export interface DiagnosticAct {
@@ -85,8 +95,8 @@ export interface DiagnosticActDto {
   recommendations: string;
   estimatedCost?: number;
   estimatedTime?: string;
-  works: Work[];
-  spares: Spare[];
+  works: DiagnosticActWorkItemDto[];
+  spares: DiagnosticActSpareItemDto[];
   status: string | number;
   dispatcherComment?: string;
   sentToClientAt?: string;
@@ -104,4 +114,74 @@ export interface Spare {
   spareName: string;
   quantity: number;
   unit: string;
+}
+
+export interface DiagnosticActWorkItemDto {
+  recordId: number;
+  workCode: number;
+  workName: string;
+  description?: string;
+  quantity: number;
+  estimatedCost?: number;
+  isApprovedByClient?: boolean;
+  // 🔥 Добавьте это поле:
+  requiredSpares?: DiagnosticActSpareItemDto[];
+}
+
+export interface DiagnosticActSpareItemDto {
+  recordId: number;
+  spareCode: number;
+  spareName: string;
+  quantity: number;
+  unit: string;
+  isApprovedByClient?: boolean;
+  unitPrice?: number;  // Цена за единицу
+}
+
+// Добавьте в конец файла:
+
+// 🔥 Типы для результата оптимизации закупок
+export interface ProcurementResultDto {
+  actCode: number;
+  calculatedAt: string;
+  procurementItems: ProcurementItemDto[];
+  supplierSummaries: SupplierSummaryDto[];
+  totalCost: number;
+  isFullySatisfied: boolean;
+  unmetDemands: UnmetDemandDto[];
+  message: string;
+}
+
+export interface ProcurementItemDto {
+  spareCode: number;
+  spareName: string;
+  requiredQuantity: number;
+  procuredQuantity: number;
+  supplierAllocations: SupplierProcurementDto[];
+}
+
+export interface SupplierProcurementDto {
+  supplierId: number;
+  supplierName: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  deliveryDays: number;
+}
+
+export interface SupplierSummaryDto {
+  supplierId: number;
+  supplierName: string;
+  totalItems: number;
+  totalQuantity: number;
+  totalCost: number;
+  maxDeliveryDays: number;
+}
+
+export interface UnmetDemandDto {
+  spareCode: number;
+  spareName: string;
+  required: number;
+  procured: number;
+  shortage: number;
 }

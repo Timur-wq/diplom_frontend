@@ -245,6 +245,26 @@
   font-size: 0.9rem;
 }
 
+.viewActBtn {
+  padding: 12px 20px;
+  background: transparent;
+  color: #5b43d1;
+  border: 1px solid rgba(91, 67, 209, 0.65);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.viewActBtn:hover:not(:disabled) {
+  background: rgba(91, 67, 209, 0.08);
+  transform: translateY(-1px);
+}
+
 @media (max-width: 768px) {
   .filtersGrid {
     grid-template-columns: 1fr;

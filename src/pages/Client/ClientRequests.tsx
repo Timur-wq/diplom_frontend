@@ -204,7 +204,6 @@ const ClientRequests: React.FC = () => {
                 <div className={styles.requestInfo}>
                   <span className={styles.requestId}>#{request.id}</span>
                   <span className={styles.requestDevice}>{request.svtType} {request.model}</span>
-                  <span className={styles.requestDate}>{formatDate(request.createdAt)}</span>
                 </div>
                 <div className={styles.requestActions}>
                   <span className={`${styles.statusBadge} ${getStatusClass(request.status)}`}>
@@ -275,7 +274,7 @@ const ClientRequests: React.FC = () => {
                               className={styles.viewActBtn}
                               onClick={(e) => {
                                 e.stopPropagation();  // 🔥 Важно: предотвращаем закрытие карточки
-                                navigate(`/client/acts/${request.id}`);
+                                navigate(`/client/acts/${request.actCode ?? request.id}`);
                               }}
                             >
                               📋 Просмотреть акт диагностики

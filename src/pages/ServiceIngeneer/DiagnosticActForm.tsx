@@ -1,14 +1,15 @@
+// src/pages/ServiceEngineer/DiagnosticActForm.tsx
+
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { authService } from '../../services/authService';
-import { hasSQLInjection } from '../../utils/sqlInjection';
 import styles from './DiagnosticActForm.module.scss';
 import {
   DiagnosticAct,
-  SpareItem,
-  SpareOption,
   DiagnosticErrors,
-  WorkItem
+  WorkItem,
+  WorkSpareLink,
+  SpareOption
 } from '../../types/diagnostic';
 import { diagnosticActService, CreateActRequest } from '../../services/diagnosticActService';
 
@@ -50,24 +51,21 @@ const DiagnosticActForm: React.FC = () => {
           authService.getSpares(),
           authService.getWorks()
         ]);
-
         setSpareOptions(spares);
         setWorkOptions(works);
       } catch (err) {
         console.error('Ошибка загрузки данных:', err);
-        // 🔥 Фолбэк на моковые данные при ошибке
         setSpareOptions(MOCK_SPARE_OPTIONS);
         setWorkOptions(MOCK_WORK_OPTIONS);
       } finally {
         setDataLoading(false);
       }
     };
-
     loadOptions();
   }, []);
 
   // Данные заявки
-  const [requestData, setRequestData] = useState({
+  const [requestData] = useState({
     clientFio: 'Иванов Иван Иванович',
     clientPhone: '+7 (000) 000-00-00',
     svtType: 'Ноутбук',
@@ -88,7 +86,7 @@ const DiagnosticActForm: React.FC = () => {
     externalCondition: '',
     identifiedIssues: '',
     testResults: '',
-    requiredSpares: [],
+    requiredSpares: [],  // 🔥 Теперь пусто - все ЗИП привязаны к работам
     requiredWorks: [],
     recommendations: '',
     estimatedCost: undefined,
@@ -100,24 +98,17 @@ const DiagnosticActForm: React.FC = () => {
   const [errors, setErrors] = useState<DiagnosticErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [spareSearch, setSpareSearch] = useState('');
   const [workSearch, setWorkSearch] = useState('');
 
-  // 🔥 Фильтрация ЗИП (используем spareOptions из стейта)
-  const filteredSpares = useMemo(() => {
-    const source = spareOptions.length > 0 ? spareOptions : MOCK_SPARE_OPTIONS;
+  // 🔥 Состояние для модального окна выбора ЗИП для работы
+  const [showSpareModal, setShowSpareModal] = useState(false);
+  const [currentWork, setCurrentWork] = useState<WorkItem | null>(null);
+  const [workSpares, setWorkSpares] = useState<WorkSpareLink[]>([]);
+  const [spareModalSearch, setSpareModalSearch] = useState('');
 
-    if (!spareSearch.trim()) return source;
-    const query = spareSearch.toLowerCase();
-    return source.filter(spare =>
-      spare.spareName.toLowerCase().includes(query)
-    );
-  }, [spareSearch, spareOptions]);
-
-  // 🔥 Фильтрация работ (используем workOptions из стейта)
+  // 🔥 Фильтрация работ
   const filteredWorks = useMemo(() => {
     const source = workOptions.length > 0 ? workOptions : MOCK_WORK_OPTIONS;
-
     if (!workSearch.trim()) return source;
     const query = workSearch.toLowerCase();
     return source.filter(work =>
@@ -126,9 +117,19 @@ const DiagnosticActForm: React.FC = () => {
     );
   }, [workSearch, workOptions]);
 
+  // 🔥 Фильтрация ЗИП в модальном окне
+  const filteredModalSpares = useMemo(() => {
+    const source = spareOptions.length > 0 ? spareOptions : MOCK_SPARE_OPTIONS;
+    if (!spareModalSearch.trim()) return source;
+    const query = spareModalSearch.toLowerCase();
+    return source.filter(spare =>
+      spare.spareName.toLowerCase().includes(query)
+    );
+  }, [spareModalSearch, spareOptions]);
+
   // ✅ Обработчик изменений
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -141,89 +142,109 @@ const DiagnosticActForm: React.FC = () => {
   };
 
   // Валидация полей
-  const validateField = useCallback((name: string, value: string | number | SpareItem[] | WorkItem[] | undefined): string | undefined => {
+  const validateField = useCallback((name: string, value: string | undefined): string | undefined => {
     switch (name) {
       case 'externalCondition':
         if (!value) return 'Опишите внешнее состояние';
         if (String(value).trim().length < 10) return 'Минимум 10 символов';
         return undefined;
-
       case 'identifiedIssues':
         if (!value) return 'Укажите выявленные неисправности';
         if (String(value).trim().length < 10) return 'Минимум 10 символов';
         return undefined;
-
       case 'testResults':
         if (!value) return 'Введите результаты тестов';
         if (String(value).trim().length < 10) return 'Минимум 10 символов';
         return undefined;
-
       case 'recommendations':
         if (!value) return 'Дайте рекомендации';
         if (String(value).trim().length < 10) return 'Минимум 10 символов';
         return undefined;
-
-      case 'requiredSpares':
-        if (formData.status === 'accepted' && (!value || (value as SpareItem[]).length === 0)) {
-          return 'Добавьте хотя бы один ЗИП или выберите "Запчасти не требуются"';
-        }
-        return undefined;
-
-      case 'requiredWorks':
-        if (formData.status === 'accepted' && (!value || (value as WorkItem[]).length === 0)) {
-          return 'Добавьте хотя бы одну работу';
-        }
-        return undefined;
-
-      case 'status':
-        if (!value) return 'Выберите статус';
-        if (value === 'rejected' && !formData.rejectionReason?.trim()) {
-          return 'Укажите причину отклонения';
-        }
-        return undefined;
-
       default:
         return undefined;
     }
-  }, [formData.status, formData.rejectionReason]);
+  }, []);
 
   // Проверка валидности формы
   const isFormValid = useMemo(() => {
-    const requiredFields = [
-      'externalCondition',
-      'identifiedIssues',
-      'testResults',
-      'recommendations',
-      'status'
-    ];
+    const requiredFields = ['externalCondition', 'identifiedIssues', 'testResults', 'recommendations'];
 
     return requiredFields.every(field => {
-      const error = validateField(field, formData[field as keyof DiagnosticAct]);
+      const value = formData[field as keyof DiagnosticAct];
+      // 🔥 Проверяем, что значение - строка
+      const error = validateField(field, typeof value === 'string' ? value : undefined);
       return !error;
-    }) && (formData.status !== 'rejected' || !!formData.rejectionReason?.trim());
+    });
   }, [formData, validateField]);
 
-  // ✅ Добавление работы
-  const handleAddWork = (workItem: WorkItem) => {
+  // 🔥 Открытие модального окна для добавления работы с ЗИП
+  const handleAddWorkWithSpares = (workItem: WorkItem) => {
     const existing = formData.requiredWorks.find(w => w.workCode === workItem.workCode);
-
     if (existing) {
+      alert('Эта работа уже добавлена');
       return;
     }
+    setCurrentWork(workItem);
+    setWorkSpares([]);
+    setSpareModalSearch('');
+    setShowSpareModal(true);
+  };
 
+  // 🔥 Добавление ЗИП в модальном окне
+  const handleAddSpareToWork = (spareOption: SpareOption) => {
+    const existing = workSpares.find(s => s.spareCode === spareOption.spareCode);
+    if (existing) {
+      setWorkSpares(prev =>
+        prev.map(s =>
+          s.spareCode === spareOption.spareCode
+            ? { ...s, quantity: s.quantity + 1 }
+            : s
+        )
+      );
+    } else {
+      setWorkSpares(prev => [
+        ...prev,
+        {
+          spareCode: spareOption.spareCode,
+          spareName: spareOption.spareName,
+          quantity: 1,
+          isRequired: true,
+          unit: spareOption.unit
+        }
+      ]);
+    }
+  };
+
+  // 🔥 Удаление ЗИП из работы
+  const handleRemoveSpareFromWork = (spareCode: number) => {
+    setWorkSpares(prev => prev.filter(s => s.spareCode !== spareCode));
+  };
+
+  // 🔥 Изменение количества ЗИП в работе
+  const handleWorkSpareQuantityChange = (spareCode: number, quantity: number) => {
+    if (quantity < 1) return;
+    setWorkSpares(prev =>
+      prev.map(s =>
+        s.spareCode === spareCode ? { ...s, quantity } : s
+      )
+    );
+  };
+
+  // 🔥 Подтверждение добавления работы с ЗИП
+  const handleConfirmWorkWithSpares = () => {
+    if (!currentWork) return;
+    const workWithSpares: WorkItem = {
+      ...currentWork,
+      requiredSpares: [...workSpares]
+    };
     setFormData(prev => ({
       ...prev,
-      requiredWorks: [...prev.requiredWorks, {
-        workCode: workItem.workCode,
-        workName: workItem.workName,
-        description: workItem.description,
-        estimatedTime: workItem.estimatedTime,
-        estimatedCost: workItem.estimatedCost
-      }]
+      requiredWorks: [...prev.requiredWorks, workWithSpares]
     }));
+    setShowSpareModal(false);
+    setCurrentWork(null);
+    setWorkSpares([]);
     setWorkSearch('');
-    console.log('➕ Работа добавлена:', workItem.workName);
-    console.log('📋 formData.requiredWorks:', formData.requiredWorks);
   };
 
   // ✅ Удаление работы
@@ -234,69 +255,18 @@ const DiagnosticActForm: React.FC = () => {
     }));
   };
 
-  // ✅ Добавление ЗИП
-  const handleAddSpare = (spareOption: SpareOption) => {
-    const existing = formData.requiredSpares.find(s => s.spareCode === spareOption.spareCode);
-
-    if (existing) {
-      setFormData(prev => ({
-        ...prev,
-        requiredSpares: prev.requiredSpares.map(s =>
-          s.spareCode === spareOption.spareCode
-            ? { ...s, quantity: s.quantity + 1 }
-            : s
-        )
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        requiredSpares: [...prev.requiredSpares, {
-          spareCode: spareOption.spareCode,
-          spareName: spareOption.spareName,
-          quantity: 1,
-          unit: spareOption.unit
-        }]
-      }));
-    }
-    setSpareSearch('');
-
-    console.log('➕ ЗИП добавлен:', spareOption.spareName);
-    console.log('📋 formData.requiredSpares:', formData.requiredSpares);
-  };
-
-  // ✅ Удаление ЗИП
-  const handleRemoveSpare = (spareCode: number) => {
-    setFormData(prev => ({
-      ...prev,
-      requiredSpares: prev.requiredSpares.filter(s => s.spareCode !== spareCode)
-    }));
-  };
-
-  // ✅ Изменение количества ЗИП
-  const handleSpareQuantityChange = (spareCode: number, quantity: number) => {
-    if (quantity < 1) return;
-    setFormData(prev => ({
-      ...prev,
-      requiredSpares: prev.requiredSpares.map(s =>
-        s.spareCode === spareCode ? { ...s, quantity } : s
-      )
-    }));
-  };
-
   // ✅ Отправка формы
-  // ✅ Отправка формы (с детальным логированием)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     console.log('🔍 НАЧАЛО ОТПРАВКИ ФОРМЫ');
-    console.log('📋 requestId из URL:', requestId);
     console.log('📋 formData:', formData);
 
     // Валидация
     const newErrors: DiagnosticErrors = {};
     ['externalCondition', 'identifiedIssues', 'testResults', 'recommendations'].forEach(key => {
       const value = formData[key as keyof DiagnosticAct];
-      const error = validateField(key, value);
+      const error = validateField(key, value as string);
       if (error) newErrors[key as keyof DiagnosticErrors] = error;
     });
 
@@ -314,7 +284,6 @@ const DiagnosticActForm: React.FC = () => {
       return;
     }
 
-    // Проверка taskId
     const taskId = Number(requestId);
     if (!taskId || isNaN(taskId)) {
       console.error('❌ Неверный taskId:', requestId);
@@ -324,10 +293,8 @@ const DiagnosticActForm: React.FC = () => {
 
     setIsLoading(true);
 
-    // ✅ Правильный код в handleSubmit:
-
     try {
-      // 🔥 Формируем запрос в формате бэкенда
+      // 🔥 Формируем запрос: ЗИП только внутри работ
       const actRequest: CreateActRequest = {
         taskId: taskId,
         diagnosticDate: formData.diagnosticDate,
@@ -337,31 +304,28 @@ const DiagnosticActForm: React.FC = () => {
         recommendations: formData.recommendations,
         estimatedCost: formData.estimatedCost,
         estimatedTime: formData.estimatedTime || '',
-        requiredSpares: formData.requiredSpares.map(s => ({
-          spareCode: s.spareCode,
-          quantity: s.quantity
-        })),
+        requiredSpares: [],  // 🔥 Пусто - все ЗИП внутри requiredWorks
         requiredWorks: formData.requiredWorks.map(w => ({
-          workCode: w.workCode
+          workCode: w.workCode,
+          requiredSpares: w.requiredSpares?.map(s => ({
+            spareCode: s.spareCode,
+            quantity: s.quantity,
+            isRequired: s.isRequired
+          })) || []
         }))
       };
 
       console.log('📦 Отправляем запрос:', JSON.stringify(actRequest, null, 2));
 
-      // 🔥 1. Создаём акт (он сам завершит наряд!)
       const actResult = await diagnosticActService.createAct(actRequest);
-
       console.log('✅ Акт создан:', actResult);
 
-      // 🔥 НЕ вызываем completeTask() - акт уже завершил наряд!
-
       alert('✅ Акт сохранён, наряд завершён!');
-      navigate('/engineer');  // Возврат в личный кабинет
+      navigate('/engineer');
 
     } catch (error: any) {
       console.error('========== ОШИБКА ==========');
       console.error('Message:', error.message);
-      console.error('Stack:', error.stack);
       alert(error.message || 'Не удалось создать акт');
     } finally {
       setIsLoading(false);
@@ -456,13 +420,11 @@ const DiagnosticActForm: React.FC = () => {
                 setErrors(prev => ({ ...prev, externalCondition: error }));
               }}
               className={`${styles.textarea} ${errors.externalCondition && touched.externalCondition ? styles.inputError : ''}`}
-              placeholder="Опишите внешние повреждения, следы эксплуатации, комплектацию..."
+              placeholder="Опишите внешние повреждения..."
               rows={4}
               disabled={isLoading}
             />
-            <div className={styles.charCount}>
-              {formData.externalCondition.length}/2000
-            </div>
+            <div className={styles.charCount}>{formData.externalCondition.length}/2000</div>
             {errors.externalCondition && touched.externalCondition && (
               <span className={styles.errorMessage}>{errors.externalCondition}</span>
             )}
@@ -486,9 +448,7 @@ const DiagnosticActForm: React.FC = () => {
               rows={5}
               disabled={isLoading}
             />
-            <div className={styles.charCount}>
-              {formData.identifiedIssues.length}/2000
-            </div>
+            <div className={styles.charCount}>{formData.identifiedIssues.length}/2000</div>
             {errors.identifiedIssues && touched.identifiedIssues && (
               <span className={styles.errorMessage}>{errors.identifiedIssues}</span>
             )}
@@ -512,9 +472,7 @@ const DiagnosticActForm: React.FC = () => {
               rows={4}
               disabled={isLoading}
             />
-            <div className={styles.charCount}>
-              {formData.testResults.length}/2000
-            </div>
+            <div className={styles.charCount}>{formData.testResults.length}/2000</div>
             {errors.testResults && touched.testResults && (
               <span className={styles.errorMessage}>{errors.testResults}</span>
             )}
@@ -538,18 +496,19 @@ const DiagnosticActForm: React.FC = () => {
               rows={4}
               disabled={isLoading}
             />
-            <div className={styles.charCount}>
-              {formData.recommendations.length}/2000
-            </div>
+            <div className={styles.charCount}>{formData.recommendations.length}/2000</div>
             {errors.recommendations && touched.recommendations && (
               <span className={styles.errorMessage}>{errors.recommendations}</span>
             )}
           </div>
         </section>
 
-        {/* Перечень необходимых работ */}
+        {/* 🔥 Перечень работ с привязанными ЗИП */}
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Перечень необходимых работ</h2>
+          <h2 className={styles.sectionTitle}>
+            Работы и требуемые запчасти
+            <span className={styles.hint}>Добавляйте работы и указывайте запчасти для каждой</span>
+          </h2>
 
           {/* Поиск и добавление работ */}
           <div className={styles.workSearch}>
@@ -572,7 +531,7 @@ const DiagnosticActForm: React.FC = () => {
               className={styles.addWorkBtn}
               onClick={() => {
                 const work = filteredWorks.find(w => w.workName === workSearch);
-                if (work) handleAddWork(work);
+                if (work) handleAddWorkWithSpares(work);
               }}
               disabled={isLoading || !workSearch.trim()}
             >
@@ -592,12 +551,20 @@ const DiagnosticActForm: React.FC = () => {
                     )}
                     {(work.estimatedTime || work.estimatedCost) && (
                       <div className={styles.workMeta}>
-                        {work.estimatedTime && (
-                          <span className={styles.workTime}>{work.estimatedTime}</span>
-                        )}
-                        {work.estimatedCost && (
-                          <span className={styles.workCost}>{work.estimatedCost} ₽</span>
-                        )}
+                        {work.estimatedTime && <span className={styles.workTime}>{work.estimatedTime}</span>}
+                        {work.estimatedCost && <span className={styles.workCost}>{work.estimatedCost} ₽</span>}
+                      </div>
+                    )}
+
+                    {/* 🔥 Привязанные ЗИП */}
+                    {work.requiredSpares && work.requiredSpares.length > 0 && (
+                      <div className={styles.workSpares}>
+                        <span className={styles.spareLabel}>Запчасти:</span>
+                        {work.requiredSpares.map(spare => (
+                          <span key={spare.spareCode} className={styles.spareTag}>
+                            {spare.spareName} × {spare.quantity} {spare.unit}
+                          </span>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -613,113 +580,14 @@ const DiagnosticActForm: React.FC = () => {
               ))}
             </div>
           )}
-
-          {errors.requiredWorks && touched.requiredWorks && (
-            <span className={styles.errorMessage}>{errors.requiredWorks}</span>
-          )}
         </section>
-
-        {/* Требуемые ЗИП */}
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Требуемые ЗИП</h2>
-
-          <div className={styles.spareSearch}>
-            <input
-              type="text"
-              className={styles.spareSearchInput}
-              placeholder="Поиск запчасти..."
-              value={spareSearch}
-              onChange={(e) => setSpareSearch(e.target.value)}
-              disabled={isLoading}
-              list="spare-options"
-            />
-            <datalist id="spare-options">
-              {filteredSpares.map(spare => (
-                <option key={spare.spareCode} value={spare.spareName} />
-              ))}
-            </datalist>
-            <button
-              type="button"
-              className={styles.addSpareBtn}
-              onClick={() => {
-                const spare = filteredSpares.find(s => s.spareName === spareSearch);
-                if (spare) handleAddSpare(spare);
-              }}
-              disabled={isLoading || !spareSearch.trim()}
-            >
-              + Добавить
-            </button>
-          </div>
-
-          {formData.requiredSpares.length > 0 && (
-            <div className={styles.spareList}>
-              {formData.requiredSpares.map((spare: SpareItem) => (
-                <div key={spare.spareCode} className={styles.spareItem}>
-                  <span className={styles.spareName}>{spare.spareName}</span>
-                  <div className={styles.spareControls}>
-                    <button
-                      type="button"
-                      className={styles.quantityBtn}
-                      onClick={() => handleSpareQuantityChange(spare.spareCode, spare.quantity - 1)}
-                      disabled={isLoading || spare.quantity <= 1}
-                    >
-                      −
-                    </button>
-                    <span className={styles.quantity}>{spare.quantity} {spare.unit}</span>
-                    <button
-                      type="button"
-                      className={styles.quantityBtn}
-                      onClick={() => handleSpareQuantityChange(spare.spareCode, spare.quantity + 1)}
-                      disabled={isLoading}
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.removeSpareBtn}
-                      onClick={() => handleRemoveSpare(spare.spareCode)}
-                      disabled={isLoading}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {errors.requiredSpares && touched.requiredSpares && (
-            <span className={styles.errorMessage}>{errors.requiredSpares}</span>
-          )}
-        </section>
-
-        {/* Подписи */}
-        {/* <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Подписи</h2>
-          <div className={styles.signatures}>
-            <div className={styles.signature}>
-              <div className={styles.signatureLine}>
-                <span>Техник:</span>
-                <span className={styles.signatureValue}>{formData.technicianFio || '________________'}</span>
-              </div>
-              <span className={styles.signatureHint}>Электронная подпись (автоматически)</span>
-            </div>
-            <div className={styles.signature}>
-              <div className={styles.signatureLine}>
-                <span>Клиент:</span>
-                <span className={styles.signatureValue}>________________</span>
-              </div>
-              <span className={styles.signatureHint}>Подпись при получении</span>
-            </div>
-          </div>
-        </section> */}
 
         {/* Кнопки действий */}
         <div className={styles.actions}>
           <button
             type="button"
             className={styles.cancelBtn}
-            onClick={() => navigate('/admin/requests')}
+            onClick={() => navigate('/engineer')}
             disabled={isLoading}
           >
             Отмена
@@ -740,6 +608,102 @@ const DiagnosticActForm: React.FC = () => {
           </button>
         </div>
       </form>
+
+      {/* 🔥 Модальное окно для выбора ЗИП для работы */}
+      {showSpareModal && currentWork && (
+        <div className={styles.modal}>
+          <div className={styles.modalContent}>
+            <h3 className={styles.modalTitle}>
+              Запчасти для работы: {currentWork.workName}
+            </h3>
+
+            <div className={styles.spareSelector}>
+              <input
+                type="text"
+                className={styles.spareSearchInput}
+                placeholder="Поиск запчасти..."
+                value={spareModalSearch}
+                onChange={(e) => setSpareModalSearch(e.target.value)}
+                list="modal-spare-options"
+              />
+              <datalist id="modal-spare-options">
+                {filteredModalSpares.map(spare => (
+                  <option key={spare.spareCode} value={spare.spareName} />
+                ))}
+              </datalist>
+              <button
+                type="button"
+                className={styles.addSpareBtn}
+                onClick={() => {
+                  const spare = filteredModalSpares.find(s => s.spareName === spareModalSearch);
+                  if (spare) handleAddSpareToWork(spare);
+                }}
+                disabled={!spareModalSearch.trim()}
+              >
+                + Добавить ЗИП
+              </button>
+            </div>
+
+            {/* Выбранные ЗИП для работы */}
+            {workSpares.length > 0 && (
+              <div className={styles.selectedSpares}>
+                <h4>Выбрано:</h4>
+                {workSpares.map(spare => (
+                  <div key={spare.spareCode} className={styles.selectedSpareItem}>
+                    <span className={styles.spareName}>{spare.spareName}</span>
+                    <div className={styles.spareControls}>
+                      <button
+                        type="button"
+                        className={styles.quantityBtn}
+                        onClick={() => handleWorkSpareQuantityChange(spare.spareCode, spare.quantity - 1)}
+                        disabled={spare.quantity <= 1}
+                      >
+                        −
+                      </button>
+                      <span className={styles.quantity}>{spare.quantity} {spare.unit}</span>
+                      <button
+                        type="button"
+                        className={styles.quantityBtn}
+                        onClick={() => handleWorkSpareQuantityChange(spare.spareCode, spare.quantity + 1)}
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.removeSpareBtn}
+                        onClick={() => handleRemoveSpareFromWork(spare.spareCode)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={styles.cancelBtn}
+                onClick={() => {
+                  setShowSpareModal(false);
+                  setCurrentWork(null);
+                  setWorkSpares([]);
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                className={styles.confirmBtn}
+                onClick={handleConfirmWorkWithSpares}
+              >
+                Добавить работу {workSpares.length > 0 && `(${workSpares.length} ЗИП)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

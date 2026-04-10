@@ -17,7 +17,8 @@ export interface ClientRequest {
   statusChangedAt?: string;
   statusChangedByFio?: string;
   createdAt: string;
-  hasDiagnosticAct?: boolean; 
+  hasDiagnosticAct?: boolean;
+  actCode?: string | number;
 }
 
 export enum RequestStatus {

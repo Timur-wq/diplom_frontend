@@ -157,11 +157,68 @@
   }
 }
 
+.workActionBtn {
+  margin-top: 0.4rem;
+  align-self: flex-start;
+  padding: 0.4rem 0.7rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.rejectBtn {
+  background: #dc3545;
+  color: #fff;
+}
+
+.restoreBtn {
+  background: #28a745;
+  color: #fff;
+}
+
+.workActionBtn:hover {
+  transform: translateY(-1px);
+}
+
 .workDetails, .spareDetails {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.workHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.workActionBtn {
+  margin-top: 0.4rem;
+  align-self: flex-start;
+  padding: 0.4rem 0.7rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.rejectBtn {
+  background: #dc3545;
+  color: #fff;
+}
+
+.restoreBtn {
+  background: #28a745;
+  color: #fff;
+}
+
+.workActionBtn:hover {
+  transform: translateY(-1px);
 }
 
 .workName, .spareName {
@@ -307,4 +364,64 @@
   .submitBtn {
     width: 100%;
   }
+}
+
+/* Стоимость */
+.costSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.costItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed #e9ecef;
+  
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.costValue {
+  font-weight: 600;
+  color: #28a745;
+}
+
+.costTotal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  border-top: 2px solid #3498db;
+  font-size: 1.1rem;
+  
+  .costValue {
+    font-size: 1.3rem;
+    color: #28a745;
+  }
+}
+
+/* Отображение цен в ЗИП */
+.linkedSpareItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0;
+  
+  .spareCost {
+    font-weight: 600;
+    color: #28a745;
+    margin-left: 0.5rem;
+  }
+}
+
+.spareCost {
+  font-weight: 600;
+  color: #28a745;
 }
