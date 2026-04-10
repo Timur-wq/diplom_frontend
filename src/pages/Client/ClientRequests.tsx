@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { clientRequestService } from '../../services/clientRequestService';
 import { ClientRequest, RequestStatus, ClientRequestFilters, getRequestStatusLabel } from '../../types/client';
 import styles from './ClientRequests.module.scss';
+import { authService } from '../../services/authService';
+import { DiagnosticActDto } from '../../types/diagnostic';
 
 const ClientRequests: React.FC = () => {
   const navigate = useNavigate();
@@ -12,6 +14,7 @@ const ClientRequests: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // Фильтры
   const [filters, setFilters] = useState<ClientRequestFilters>({
@@ -272,12 +275,47 @@ const ClientRequests: React.FC = () => {
                           <div className={styles.actionSection}>
                             <button
                               className={styles.viewActBtn}
-                              onClick={(e) => {
-                                e.stopPropagation();  // 🔥 Важно: предотвращаем закрытие карточки
-                                navigate(`/client/acts/${request.actCode ?? request.id}`);
+                              onClick={async (e) => {
+                                e.stopPropagation();
+
+                                // 🔥 Если actCode есть — используем его
+                                if (request.actCode) {
+                                  navigate(`/client/acts/${request.actCode}`);
+                                  return;
+                                }
+
+                                // 🔥 Если actCode нет — загружаем список актов и ищем по requestId
+                                try {
+                                  setSubmitting(true);
+
+                                  const response = await authService.fetchWithAuth(
+                                    'https://localhost:7053/api/client/DiagnosticAct/pending'
+                                  );
+
+                                  if (!response.ok) {
+                                    throw new Error('Не удалось загрузить акты');
+                                  }
+
+                                  const pendingActs: DiagnosticActDto[] = await response.json();
+
+                                  // Ищем акт с нужным requestId
+                                  const act = pendingActs.find(a => a.requestId === request.id);
+
+                                  if (act?.actCode) {
+                                    navigate(`/client/acts/${act.actCode}`);
+                                  } else {
+                                    alert('Акт ещё не готов к просмотру');
+                                  }
+                                } catch (err: any) {
+                                  console.error('Ошибка загрузки акта:', err);
+                                  alert(err.message || 'Ошибка при загрузке акта');
+                                } finally {
+                                  setSubmitting(false);
+                                }
                               }}
+                              disabled={submitting}
                             >
-                              📋 Просмотреть акт диагностики
+                              {submitting ? 'Загрузка...' : '📋 Просмотреть акт диагностики'}
                             </button>
                           </div>
                         )}
