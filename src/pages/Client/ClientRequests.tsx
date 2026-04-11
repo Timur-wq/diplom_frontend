@@ -15,6 +15,13 @@ const ClientRequests: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [invoiceInfo, setInvoiceInfo] = useState<Record<number, {
+    contractSigned: boolean;
+    invoiceGenerated: boolean;
+    invoiceFilePath?: string;
+    invoiceAmount?: number;
+  } | null>>({});
+  const [diagnosticActs, setDiagnosticActs] = useState<Record<number, boolean>>({});
 
   // Фильтры
   const [filters, setFilters] = useState<ClientRequestFilters>({
@@ -24,6 +31,41 @@ const ClientRequests: React.FC = () => {
     dateTo: '',
     svtType: ''
   });
+
+  // Добавьте функцию проверки наличия акта:
+  const checkDiagnosticAct = async (requestId: number): Promise<boolean> => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/dispatcher/DiagnosticAct/by-request/${requestId}`
+      );
+
+      if (response.ok) {
+        return true;  // Акт существует
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  // 🔥 Загрузка информации о счёте для заявки
+  const loadInvoiceInfo = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/client/Document/request/${requestId}/invoice-info`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setInvoiceInfo(prev => ({
+          ...prev,
+          [requestId]: data
+        }));
+      }
+    } catch (error) {
+      console.error(`Ошибка загрузки информации о счёте для заявки ${requestId}:`, error);
+    }
+  };
 
   // Загрузка заявок
   const loadRequests = useCallback(async () => {
@@ -103,7 +145,18 @@ const ClientRequests: React.FC = () => {
   };
 
   const toggleExpand = (id: number) => {
-    setExpandedId(expandedId === id ? null : id);
+    const isExpanding = expandedId !== id;
+    setExpandedId(isExpanding ? id : null);
+
+    // 🔥 При разворачивании загружаем информацию об акте и счёте
+    if (isExpanding) {
+      checkDiagnosticAct(id).then((hasAct: boolean) => {
+        setDiagnosticActs((prev: Record<number, boolean>) => ({ ...prev, [id]: hasAct }));
+      });
+
+      // 🔥 Загружаем информацию о счёте
+      loadInvoiceInfo(id);
+    }
   };
 
   if (loading) return <div className={styles.loading}>Загрузка заявок...</div>;
@@ -270,53 +323,72 @@ const ClientRequests: React.FC = () => {
                       {/* ... остальные поля ... */}
 
                       {/* 🔥 Кнопка просмотра акта */}
+                      {/* 🔥 Кнопка просмотра акта и счёта */}
                       {(request.status === RequestStatus.DiagnosticCompleted ||
-                        request.status === RequestStatus.WaitingForClientApproval) && (
+                        request.status === RequestStatus.WaitingForClientApproval ||
+                        request.status === RequestStatus.ApprovedByClient) && (  // ✅ Добавили этот статус!
                           <div className={styles.actionSection}>
                             <button
                               className={styles.viewActBtn}
                               onClick={async (e) => {
                                 e.stopPropagation();
-
-                                // 🔥 Если actCode есть — используем его
-                                if (request.actCode) {
-                                  navigate(`/client/acts/${request.actCode}`);
-                                  return;
-                                }
-
-                                // 🔥 Если actCode нет — загружаем список актов и ищем по requestId
-                                try {
-                                  setSubmitting(true);
-
-                                  const response = await authService.fetchWithAuth(
-                                    'https://localhost:7053/api/client/DiagnosticAct/pending'
-                                  );
-
-                                  if (!response.ok) {
-                                    throw new Error('Не удалось загрузить акты');
-                                  }
-
-                                  const pendingActs: DiagnosticActDto[] = await response.json();
-
-                                  // Ищем акт с нужным requestId
-                                  const act = pendingActs.find(a => a.requestId === request.id);
-
-                                  if (act?.actCode) {
-                                    navigate(`/client/acts/${act.actCode}`);
-                                  } else {
-                                    alert('Акт ещё не готов к просмотру');
-                                  }
-                                } catch (err: any) {
-                                  console.error('Ошибка загрузки акта:', err);
-                                  alert(err.message || 'Ошибка при загрузке акта');
-                                } finally {
-                                  setSubmitting(false);
-                                }
+                                // ... существующая логика просмотра акта ...
                               }}
                               disabled={submitting}
                             >
                               {submitting ? 'Загрузка...' : '📋 Просмотреть акт диагностики'}
                             </button>
+
+                            {/* 🔥 НОВАЯ КНОПКА: Просмотреть счёт на оплату */}
+                            {(() => {
+                              const currentInvoiceInfo = invoiceInfo[request.id];
+
+                              return currentInvoiceInfo?.invoiceGenerated ? (
+                                <button
+                                  className={styles.viewInvoiceBtn}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+
+                                    try {
+                                      // 🔥 Скачиваем файл с токеном авторизации
+                                      const response = await authService.fetchWithAuth(
+                                        `https://localhost:7053/api/client/Document/invoice/${request.id}/download`
+                                      );
+
+                                      if (!response.ok) {
+                                        throw new Error('Не удалось скачать счёт');
+                                      }
+
+                                      // 🔥 Получаем blob с PDF
+                                      const blob = await response.blob();
+
+                                      // 🔥 Создаём URL для blob
+                                      const blobUrl = window.URL.createObjectURL(blob);
+
+                                      // 🔥 Открываем в новой вкладке
+                                      window.open(blobUrl, '_blank');
+
+                                      // 🔥 Очищаем URL через некоторое время
+                                      setTimeout(() => {
+                                        window.URL.revokeObjectURL(blobUrl);
+                                      }, 60000);
+
+                                    } catch (error: any) {
+                                      console.error('Ошибка скачивания счёта:', error);
+                                      alert(error.message || 'Не удалось скачать счёт');
+                                    }
+                                  }}
+                                  title="Скачать счёт на предоплату (только ЗИП)"
+                                >
+                                  🧾 Просмотреть счёт на оплату
+                                  {currentInvoiceInfo.invoiceAmount && (
+                                    <span className={styles.invoiceAmount}>
+                                      {' '}{currentInvoiceInfo.invoiceAmount.toLocaleString('ru-RU')} ₽
+                                    </span>
+                                  )}
+                                </button>
+                              ) : null;
+                            })()}
                           </div>
                         )}
                     </div>

@@ -9,13 +9,13 @@ interface RequestDto {
   clientId: number;
   clientFio: string;
   clientPhone: string;
-  
+
   // ✅ Назначенный специалист
   assignedEngineerTabNumber?: number;
   assignedEngineerFio?: string;
   assignedEngineerLogin?: string;
   assignedAt?: string;  // Дата назначения наряда
-  
+
   status: RequestStatus;
   dateOnly: string;
   timeOnly: string;
@@ -56,7 +56,23 @@ const RequestsAdmin: React.FC = () => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [rejectionReason, setRejectionReason] = useState<Record<number, string>>({});
   const [processingId, setProcessingId] = useState<number | null>(null);
-  
+  const [generatingContract, setGeneratingContract] = useState<Record<number, boolean>>({});
+  const [signedContracts, setSignedContracts] = useState<Record<number, boolean | undefined>>({});
+  const [contractIds, setContractIds] = useState<Record<number, number>>({});
+  // 🔥 Состояние для информации о счёте (по requestId)
+  const [invoiceInfo, setInvoiceInfo] = useState<Record<number, {
+    invoiceId?: number;
+    generated: boolean;
+    amount?: number;
+    filePath?: string;
+    receiptUploaded: boolean;
+    isPaid: boolean;
+  } | null>>({});
+
+  // 🔥 Состояние для загрузки/генерации
+  const [generatingInvoice, setGeneratingInvoice] = useState<Record<number, boolean>>({});
+  const [confirmingPayment, setConfirmingPayment] = useState<Record<number, boolean>>({});
+
   // Фильтры (клиентские)
   const [filters, setFilters] = useState<Filters>({
     status: 'All',
@@ -65,6 +81,119 @@ const RequestsAdmin: React.FC = () => {
     dateTo: '',
     svtType: ''
   });
+
+
+
+  // Функция для проверки статуса подписания при загрузке:
+  const checkContractSigned = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/dispatcher/Document/request/${requestId}/contract`
+      );
+
+      if (response.ok) {
+        const contract = await response.json();
+        setSignedContracts(prev => ({
+          ...prev,
+          [requestId]: contract.isSignedByClient
+        }));
+        // 🔥 Сохраняем contractId
+        if (contract.contractId) {
+          setContractIds(prev => ({
+            ...prev,
+            [requestId]: contract.contractId
+          }));
+        }
+      }
+    } catch (error) {
+      // Договор ещё не создан
+      console.log(`Договор для заявки ${requestId} ещё не создан`);
+      // 🔥 Устанавливаем undefined — значит договор ещё не создан
+      setSignedContracts(prev => ({
+        ...prev,
+        [requestId]: undefined
+      }));
+    }
+  };
+
+  // Функция для отметки договора как подписанного:
+  // Функция для отметки договора как подписанного:
+  const handleMarkContractSigned = async (requestId: number) => {
+    const contractId = contractIds[requestId];
+    if (!contractId) {
+      alert('Не удалось найти договор');
+      return;
+    }
+
+    if (!window.confirm('Отметить договор как подписанный клиентом?')) return;
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/dispatcher/Document/contract/${contractId}/mark-signed`,
+        { method: 'POST' }
+      );
+
+      if (response.ok) {
+        setSignedContracts(prev => ({
+          ...prev,
+          [requestId]: true
+        }));
+        alert('✅ Договор отмечен как подписанный');
+      } else {
+        throw new Error('Не удалось отметить договор');
+      }
+    } catch (error: any) {
+      alert(error.message || 'Ошибка при отметке договора');
+    }
+  };
+
+  const handleGenerateContract = async (requestId: number) => {
+    if (!window.confirm('Сформировать договор для заявки #' + requestId + '?')) return;
+
+    setGeneratingContract(prev => ({ ...prev, [requestId]: true }));
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/dispatcher/Document/request/${requestId}/generate-contract`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Не удалось сформировать договор');
+      }
+
+      const result = await response.json();
+
+      // 🔥 Открываем договор в новой вкладке
+      const contractUrl = `https://localhost:7053/${result.contract.filePath}`;
+      window.open(contractUrl, '_blank', 'noopener,noreferrer');
+
+      alert('✅ Договор сформирован и открыт в новой вкладке');
+
+      // 🔥 ИСПРАВЛЕНИЕ: Сохраняем И contractId, И статус
+      setSignedContracts(prev => ({
+        ...prev,
+        [requestId]: false  // false = создан, но не подписан
+      }));
+
+      // 🔥 СОХРАНЯЕМ contractId!
+      if (result.contract.contractId) {
+        setContractIds(prev => ({
+          ...prev,
+          [requestId]: result.contract.contractId
+        }));
+      }
+
+      refreshData();
+
+    } catch (error: any) {
+      console.error('❌ Ошибка генерации договора:', error);
+      alert(error.message || 'Не удалось сформировать договор');
+    } finally {
+      setGeneratingContract(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
 
   const [assignModal, setAssignModal] = useState<{
     isOpen: boolean;
@@ -79,53 +208,53 @@ const RequestsAdmin: React.FC = () => {
     requestId: null,
     engineer: null
   });
-  
+
   const [assigningId, setAssigningId] = useState<number | null>(null);
   const [diagnosticActs, setDiagnosticActs] = useState<Record<number, boolean>>({});
   const navigate = useNavigate();
 
   // ✅ Открыть модальное окно назначения
   // ✅ Открыть модальное окно назначения с загрузкой кандидатов
-    const handleOpenAssignModal = async (requestId: number, workId: number = 1) => {
-      const request = allRequests.find(r => r.id === requestId);
-      if (!request) return;
-      
-      setAssignModal({
-        isOpen: true,
-        requestId,
-        engineer: null
-      });
-      
-      try {
-        // 🔥 Загружаем кандидатов с бэкенда
-        const response = await authService.fetchWithAuth(
-          `https://localhost:7053/api/Task/candidates/${workId}?svtModel=${encodeURIComponent(request.model)}`
-        );
-        
-        if (response.ok) {
-          const candidates = await response.json();
-          
-          if (candidates.length > 0) {
-            // Берём первого кандидата (с наименьшей загрузкой)
-            const bestCandidate = candidates[0];
-            
-            setAssignModal(prev => ({
-              ...prev,
-              engineer: {
-                fio: bestCandidate.fio,
-                tabNumber: bestCandidate.tabNumber.toString(),
-                specialization: '' // Можно добавить поле в DTO
-              }
-            }));
-          } else {
-            alert('⚠️ Нет доступных специалистов с нужной квалификацией');
-          }
+  const handleOpenAssignModal = async (requestId: number, workId: number = 1) => {
+    const request = allRequests.find(r => r.id === requestId);
+    if (!request) return;
+
+    setAssignModal({
+      isOpen: true,
+      requestId,
+      engineer: null
+    });
+
+    try {
+      // 🔥 Загружаем кандидатов с бэкенда
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/Task/candidates/${workId}?svtModel=${encodeURIComponent(request.model)}`
+      );
+
+      if (response.ok) {
+        const candidates = await response.json();
+
+        if (candidates.length > 0) {
+          // Берём первого кандидата (с наименьшей загрузкой)
+          const bestCandidate = candidates[0];
+
+          setAssignModal(prev => ({
+            ...prev,
+            engineer: {
+              fio: bestCandidate.fio,
+              tabNumber: bestCandidate.tabNumber.toString(),
+              specialization: '' // Можно добавить поле в DTO
+            }
+          }));
+        } else {
+          alert('⚠️ Нет доступных специалистов с нужной квалификацией');
         }
-      } catch (error) {
-        console.error('Ошибка загрузки кандидатов:', error);
-        alert('Не удалось загрузить список специалистов');
       }
-    };
+    } catch (error) {
+      console.error('Ошибка загрузки кандидатов:', error);
+      alert('Не удалось загрузить список специалистов');
+    }
+  };
 
   // ✅ Закрыть модальное окно
   const handleCloseAssignModal = () => {
@@ -137,111 +266,111 @@ const RequestsAdmin: React.FC = () => {
   };
 
   // ✅ Подтвердить назначение (реальный запрос к бэкенду)
-    const handleConfirmAssign = async () => {
-      if (!assignModal.requestId || !assignModal.engineer) return;
-      
-      setAssigningId(assignModal.requestId);
-      
-      try {
-        // 🔥 Реальный запрос к API
-        const response = await authService.fetchWithAuth(
-          'https://localhost:7053/api/Task/assign',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              workId: 1,  // 🔴 Замените на реальный workId из заявки!
-              requestId: assignModal.requestId,
-              maxActiveOrders: 2  // Лимит активных нарядов на инженера
-            }),
-          }
-        );
+  const handleConfirmAssign = async () => {
+    if (!assignModal.requestId || !assignModal.engineer) return;
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || 'Не удалось назначить наряд');
+    setAssigningId(assignModal.requestId);
+
+    try {
+      // 🔥 Реальный запрос к API
+      const response = await authService.fetchWithAuth(
+        'https://localhost:7053/api/Task/assign',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            workId: 1,  // 🔴 Замените на реальный workId из заявки!
+            requestId: assignModal.requestId,
+            maxActiveOrders: 2  // Лимит активных нарядов на инженера
+          }),
         }
+      );
 
-        const result = await response.json();
-        
-        console.log('✅ Наряд назначен:', result);
-        
-        // 🔥 Обновляем локальный стейт с данными от сервера
-        setAllRequests(prev => prev.map(req => 
-          req.id === assignModal.requestId 
-            ? { 
-                ...req, 
-                assignedEngineerFio: result.engineerName || assignModal.engineer!.fio,
-                assignedEngineerTabNumber: result.assignedEngineerId,
-                assignedAt: result.assignedAt || new Date().toISOString(),
-                status: RequestStatus.InProgress  // Меняем статус на "В работе"
-              }
-            : req
-        ));
-        
-        alert('✅ Специалист назначен!');
-        handleCloseAssignModal();
-        refreshData();  // Перезагружаем данные с сервера
-        
-      } catch (error: any) {
-        console.error('❌ Ошибка назначения:', error);
-        alert(error.message || 'Не удалось назначить специалиста');
-      } finally {
-        setAssigningId(null);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Не удалось назначить наряд');
       }
-    };
+
+      const result = await response.json();
+
+      console.log('✅ Наряд назначен:', result);
+
+      // 🔥 Обновляем локальный стейт с данными от сервера
+      setAllRequests(prev => prev.map(req =>
+        req.id === assignModal.requestId
+          ? {
+            ...req,
+            assignedEngineerFio: result.engineerName || assignModal.engineer!.fio,
+            assignedEngineerTabNumber: result.assignedEngineerId,
+            assignedAt: result.assignedAt || new Date().toISOString(),
+            status: RequestStatus.InProgress  // Меняем статус на "В работе"
+          }
+          : req
+      ));
+
+      alert('✅ Специалист назначен!');
+      handleCloseAssignModal();
+      refreshData();  // Перезагружаем данные с сервера
+
+    } catch (error: any) {
+      console.error('❌ Ошибка назначения:', error);
+      alert(error.message || 'Не удалось назначить специалиста');
+    } finally {
+      setAssigningId(null);
+    }
+  };
 
   // Статистика
   const [stats, setStats] = useState<Record<string, number>>({});
 
   // Загрузка заявок
   const loadRequests = useCallback(async () => {
-  setLoading(true);
-  setError(null);
+    setLoading(true);
+    setError(null);
 
-  try {
-    const response = await authService.fetchWithAuth(
-      'https://localhost:7053/api/AdminRequest'
-    );
+    try {
+      const response = await authService.fetchWithAuth(
+        'https://localhost:7053/api/AdminRequest'
+      );
 
-    if (!response.ok) throw new Error('Не удалось загрузить заявки');
+      if (!response.ok) throw new Error('Не удалось загрузить заявки');
 
-    const data: any[] = await response.json();
-    
-    // ✅ Конвертируем числовые статусы в строки
-    const statusMap: Record<number, RequestStatus> = {
-      0: RequestStatus.New,
-      1: RequestStatus.Accepted,
-      2: RequestStatus.Rejected,
-      3: RequestStatus.InProgress,
-      4: RequestStatus.DiagnosticCompleted,
-      5: RequestStatus.WaitingForClientApproval,
-      6: RequestStatus.ApprovedByClient,
-      7: RequestStatus.Completed,
-      8: RequestStatus.Cancelled
-    };
-    
-    const normalizedData: RequestDto[] = data.map(item => ({
-      ...item,
-      status: typeof item.status === 'number' 
-        ? statusMap[item.status] || RequestStatus.New
-        : item.status,
-      
-      // ✅ Маппинг полей назначенного специалиста (если бэкенд возвращает их иначе)
-      assignedEngineerTabNumber: item.assignedEngineerTabNumber || item.serviceEngineerTabNumber,
-      assignedEngineerFio: item.assignedEngineerFio || item.assignedEngineerName,
-      assignedAt: item.assignedAt || item.taskAssignedAt
-    }));
-    
-    setAllRequests(normalizedData);
-  } catch (err) {
-    setError(err instanceof Error ? err.message : 'Ошибка загрузки');
-  } finally {
-    setLoading(false);
-  }
-}, []);
+      const data: any[] = await response.json();
+
+      // ✅ Конвертируем числовые статусы в строки
+      const statusMap: Record<number, RequestStatus> = {
+        0: RequestStatus.New,
+        1: RequestStatus.Accepted,
+        2: RequestStatus.Rejected,
+        3: RequestStatus.InProgress,
+        4: RequestStatus.DiagnosticCompleted,
+        5: RequestStatus.WaitingForClientApproval,
+        6: RequestStatus.ApprovedByClient,
+        7: RequestStatus.Completed,
+        8: RequestStatus.Cancelled
+      };
+
+      const normalizedData: RequestDto[] = data.map(item => ({
+        ...item,
+        status: typeof item.status === 'number'
+          ? statusMap[item.status] || RequestStatus.New
+          : item.status,
+
+        // ✅ Маппинг полей назначенного специалиста (если бэкенд возвращает их иначе)
+        assignedEngineerTabNumber: item.assignedEngineerTabNumber || item.serviceEngineerTabNumber,
+        assignedEngineerFio: item.assignedEngineerFio || item.assignedEngineerName,
+        assignedAt: item.assignedAt || item.taskAssignedAt
+      }));
+
+      setAllRequests(normalizedData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка загрузки');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // Загрузка статистики
   const loadStats = useCallback(async () => {
@@ -321,13 +450,130 @@ const RequestsAdmin: React.FC = () => {
 
   // Развернуть/свернуть аккордеон
   const toggleExpand = (id: number) => {
-    setExpandedId(expandedId === id ? null : id);
-    
-    // Проверяем наличие акта при развертывании
-    if (expandedId !== id) {
+    const isExpanding = expandedId !== id;
+    setExpandedId(isExpanding ? id : null);
+
+    if (isExpanding) {
       checkDiagnosticAct(id).then(hasAct => {
         setDiagnosticActs(prev => ({ ...prev, [id]: hasAct }));
       });
+
+      // 🔥 Загружаем информацию о договоре и счёте
+      checkContractSigned(id);
+      loadInvoiceInfo(id);
+    }
+  };
+
+  // 🔥 Загрузка информации о счёте
+  const loadInvoiceInfo = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/dispatcher/Document/request/${requestId}/invoice-info`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setInvoiceInfo(prev => ({
+          ...prev,
+          [requestId]: {
+            invoiceId: data.invoiceId,
+            generated: data.generated,
+            amount: data.amount,
+            filePath: data.filePath,
+            receiptUploaded: data.receiptUploaded,
+            isPaid: data.isPaid
+          }
+        }));
+      }
+    } catch (error) {
+      console.error(`Ошибка загрузки информации о счёте для заявки ${requestId}:`, error);
+    }
+  };
+
+  // 🔥 Генерация счёта на предоплату
+  const handleGenerateInvoice = async (requestId: number) => {
+    if (!window.confirm('Сформировать счёт на предоплату для заявки #' + requestId + '?')) return;
+
+    setGeneratingInvoice(prev => ({ ...prev, [requestId]: true }));
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/dispatcher/Document/request/${requestId}/generate-invoice`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Не удалось сформировать счёт');
+      }
+
+      const result = await response.json();
+
+      // 🔥 Открываем счёт в новой вкладке
+      const invoiceUrl = `https://localhost:7053/${result.invoice.filePath}`;
+      window.open(invoiceUrl, '_blank', 'noopener,noreferrer');
+
+      alert('✅ Счёт сформирован и открыт в новой вкладке');
+
+      // 🔥 Обновляем состояние
+      setInvoiceInfo(prev => ({
+        ...prev,
+        [requestId]: {
+          invoiceId: result.invoice.invoiceId,
+          generated: true,
+          amount: result.invoice.amount,
+          filePath: result.invoice.filePath,
+          receiptUploaded: false,
+          isPaid: false
+        }
+      }));
+
+    } catch (error: any) {
+      console.error('❌ Ошибка генерации счёта:', error);
+      alert(error.message || 'Не удалось сформировать счёт');
+    } finally {
+      setGeneratingInvoice(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  // 🔥 Подтверждение предоплаты
+  const handleConfirmPrepayment = async (requestId: number) => {
+    const invoice = invoiceInfo[requestId];
+    if (!invoice?.invoiceId) {
+      alert('Не удалось найти счёт');
+      return;
+    }
+
+    if (!window.confirm('Подтвердить получение предоплаты по счёту #' + invoice.invoiceId + '?')) return;
+
+    setConfirmingPayment(prev => ({ ...prev, [requestId]: true }));
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/dispatcher/Document/invoice/${invoice.invoiceId}/confirm-paid`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) {
+        throw new Error('Не удалось подтвердить предоплату');
+      }
+
+      // 🔥 Обновляем состояние
+      setInvoiceInfo(prev => ({
+        ...prev,
+        [requestId]: prev[requestId] ? { ...prev[requestId]!, isPaid: true } : null
+      }));
+
+      alert('✅ Предоплата подтверждена! Работы могут начинаться.');
+
+      // 🔥 Обновляем статус заявки (опционально)
+      refreshData();
+
+    } catch (error: any) {
+      console.error('❌ Ошибка подтверждения предоплаты:', error);
+      alert(error.message || 'Не удалось подтвердить предоплату');
+    } finally {
+      setConfirmingPayment(prev => ({ ...prev, [requestId]: false }));
     }
   };
 
@@ -359,7 +605,7 @@ const RequestsAdmin: React.FC = () => {
   // Отклонить заявку
   const handleReject = async (id: number) => {
     const reason = rejectionReason[id]?.trim();
-    
+
     if (!reason || reason.length < 5) {
       alert('Укажите причину отклонения (минимум 5 символов)');
       return;
@@ -373,9 +619,9 @@ const RequestsAdmin: React.FC = () => {
         `https://localhost:7053/api/adminrequests/${id}/status`,
         {
           method: 'PUT',
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             status: RequestStatus.Rejected,
-            rejectionReason: reason 
+            rejectionReason: reason
           }),
         }
       );
@@ -437,15 +683,15 @@ const RequestsAdmin: React.FC = () => {
   // Функция форматирования телефона
   const formatPhone = (phone: string) => {
     if (!phone) return '';
-    
+
     // Удаляем все нецифровые символы
     const digits = phone.replace(/\D/g, '');
-    
+
     // Проверяем, что есть 11 цифр (российский формат)
     if (digits.length !== 11) {
       return phone; // Возвращаем как есть, если формат не совпадает
     }
-    
+
     // Форматируем: +0 (000) 000-00-00
     return `+${digits[0]} (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9, 11)}`;
   };
@@ -459,20 +705,20 @@ const RequestsAdmin: React.FC = () => {
   }
 
   // В компоненте добавьте функцию проверки наличия акта:
-const checkDiagnosticAct = async (requestId: number) => {
-  try {
-    const response = await authService.fetchWithAuth(
-      `https://localhost:7053/api/dispatcher/DiagnosticAct/by-request/${requestId}`
-    );
-    
-    if (response.ok) {
-      return true;  // Акт существует
+  const checkDiagnosticAct = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/dispatcher/DiagnosticAct/by-request/${requestId}`
+      );
+
+      if (response.ok) {
+        return true;  // Акт существует
+      }
+      return false;
+    } catch {
+      return false;
     }
-    return false;
-  } catch {
-    return false;
-  }
-};
+  };
 
   return (
     <div className={styles.container}>
@@ -524,9 +770,9 @@ const checkDiagnosticAct = async (requestId: number) => {
             <select
               className={styles.filterSelect}
               value={filters.status}
-              onChange={(e) => setFilters(prev => ({ 
-                ...prev, 
-                status: e.target.value as RequestStatus | 'All' 
+              onChange={(e) => setFilters(prev => ({
+                ...prev,
+                status: e.target.value as RequestStatus | 'All'
               }))}
             >
               <option value="All">Все статусы</option>
@@ -606,14 +852,14 @@ const checkDiagnosticAct = async (requestId: number) => {
       <div className={styles.requestsList}>
         {filteredRequests.length === 0 ? (
           <div className={styles.empty}>
-            {allRequests.length === 0 
-              ? 'Заявок пока нет' 
+            {allRequests.length === 0
+              ? 'Заявок пока нет'
               : 'По вашему фильтру заявок не найдено'}
           </div>
         ) : (
           filteredRequests.map((request) => (
             <div key={request.id} className={styles.requestCard}>
-              <div 
+              <div
                 className={styles.requestHeader}
                 onClick={() => toggleExpand(request.id)}
               >
@@ -636,7 +882,7 @@ const checkDiagnosticAct = async (requestId: number) => {
               {expandedId === request.id && (
                 <div className={styles.requestDetails}>
                   {/* DEBUG: Показываем текущий статус */}
-                  
+
                   <div className={styles.detailsGrid}>
                     <div className={styles.detailItem}>
                       <label>Клиент:</label>
@@ -747,84 +993,204 @@ const checkDiagnosticAct = async (requestId: number) => {
                       </button>
                     </div>
                   )}
+                  {/* ✅ Кнопка формирования договора - появляется после согласования клиентом */}
+
 
                   {diagnosticActs[request.id] && (
                     <div className={styles.actionButtons}>
                       <button
                         className={styles.viewActBtn}
                         onClick={() => {
-                          // 🔥 Переходим на страницу акта
                           navigate(`/dispatcher/acts/${request.id}`, { replace: true });
                         }}
                         title="Просмотреть акт диагностики"
                       >
                         📋 Акт диагностики
                       </button>
+
+                      {/* Кнопка формирования договора */}
+                      {!signedContracts[request.id] && (
+                        <button
+                          className={styles.contractBtn}
+                          onClick={async () => {
+                            await handleGenerateContract(request.id);
+                          }}
+                          disabled={generatingContract[request.id]}
+                        >
+                          {generatingContract[request.id] ? '📄 Формирование...' : '📄 Сформировать договор'}
+                        </button>
+                      )}
+
+                      {/* 🔥 Чекбокс подписания — показывается если договор создан */}
+                      {/* 🔥 Чекбокс подписания — показывается если договор создан */}
+                      {signedContracts[request.id] !== undefined && (
+                        <label className={styles.signedCheckbox}>
+                          <input
+                            type="checkbox"
+                            checked={signedContracts[request.id] || false}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                handleMarkContractSigned(request.id);
+                              }
+                            }}
+                            disabled={signedContracts[request.id]} // Нельзя снять галочку
+                          />
+                          <span>
+                            {signedContracts[request.id] ? '✅ Договор подписан' : '☑️ Отметить как подписанный'}
+                          </span>
+                        </label>
+                      )}
+                    </div>
+                  )}
+                  {/* 🔥 СЕКЦИЯ СЧЁТА — появляется после подписания договора */}
+                  {signedContracts[request.id] === true && (
+                    <div className={styles.invoiceSection}>
+                      <div className={styles.sectionTitle}>🧾 Счёт на предоплату</div>
+
+                      {/* Если счёт ещё не сформирован */}
+                      {!invoiceInfo[request.id]?.generated && (
+                        <button
+                          className={styles.generateInvoiceBtn}
+                          onClick={() => handleGenerateInvoice(request.id)}
+                          disabled={generatingInvoice[request.id]}
+                        >
+                          {generatingInvoice[request.id] ? (
+                            <span className={styles.loading}>
+                              <span className={styles.spinner}></span>
+                              Формирование...
+                            </span>
+                          ) : (
+                            '🧾 Сформировать счёт на предоплату'
+                          )}
+                        </button>
+                      )}
+
+                      {/* Если счёт сформирован */}
+                      {invoiceInfo[request.id]?.generated && (
+                        <div className={styles.invoiceDetails}>
+                          <div className={styles.invoiceRow}>
+                            <span>Сумма к оплате (только ЗИП):</span>
+                            <span className={styles.invoiceAmount}>
+                              {invoiceInfo[request.id]?.amount?.toLocaleString('ru-RU')} ₽
+                            </span>
+                          </div>
+
+                          {/* Кнопка просмотра счёта */}
+                          {invoiceInfo[request.id]?.filePath && (
+                            <a
+                              href={`https://localhost:7053/${invoiceInfo[request.id]?.filePath}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.viewInvoiceLink}
+                            >
+                              📄 Просмотреть счёт (PDF)
+                            </a>
+                          )}
+
+                          {/* Статус чека */}
+                          <div className={styles.receiptStatus}>
+                            {invoiceInfo[request.id]?.receiptUploaded ? (
+                              <span className={styles.receiptUploaded}>
+                                ✅ Чек загружен клиентом
+                              </span>
+                            ) : (
+                              <span className={styles.receiptPending}>
+                                ⏳ Ожидается загрузка чека от клиента
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Кнопка подтверждения предоплаты */}
+                          {!invoiceInfo[request.id]?.isPaid && invoiceInfo[request.id]?.receiptUploaded && (
+                            <button
+                              className={styles.confirmPaymentBtn}
+                              onClick={() => handleConfirmPrepayment(request.id)}
+                              disabled={confirmingPayment[request.id]}
+                            >
+                              {confirmingPayment[request.id] ? (
+                                <span className={styles.loading}>
+                                  <span className={styles.spinner}></span>
+                                  Подтверждение...
+                                </span>
+                              ) : (
+                                '✅ Подтвердить предоплату'
+                              )}
+                            </button>
+                          )}
+
+                          {/* Если предоплата подтверждена */}
+                          {invoiceInfo[request.id]?.isPaid && (
+                            <div className={styles.paymentConfirmed}>
+                              ✅ Предоплата подтверждена — работы могут начинаться
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {/* ✅ Отображение назначенного специалиста */}
-                  {(request.assignedEngineerFio) && 
-                  request.status !== RequestStatus.New && (
-                    <div className={styles.assignedEngineer}>
-                      <div className={styles.engineerHeader}>
-                        <span className={styles.engineerIcon}>👷</span>
-                        <span className={styles.engineerLabel}>Назначенный специалист:</span>
-                      </div>
-                      
-                      <div className={styles.engineerCard}>
-                        <div className={styles.engineerAvatar}>
-                          {request.assignedEngineerFio?.charAt(0)}
+                  {(request.assignedEngineerFio) &&
+                    request.status !== RequestStatus.New && (
+                      <div className={styles.assignedEngineer}>
+                        <div className={styles.engineerHeader}>
+                          <span className={styles.engineerIcon}>👷</span>
+                          <span className={styles.engineerLabel}>Назначенный специалист:</span>
                         </div>
-                        
-                        <div className={styles.engineerInfo}>
-                          <div className={styles.engineerName}>
-                            {request.assignedEngineerFio}
+
+                        <div className={styles.engineerCard}>
+                          <div className={styles.engineerAvatar}>
+                            {request.assignedEngineerFio?.charAt(0)}
                           </div>
-                          
-                          {request.assignedEngineerTabNumber && (
-                            <div className={styles.engineerDetail}>
-                              <span className={styles.detailLabel}>Табельный номер:</span>
-                              <span className={styles.detailValue}>{request.assignedEngineerTabNumber}</span>
+
+                          <div className={styles.engineerInfo}>
+                            <div className={styles.engineerName}>
+                              {request.assignedEngineerFio}
                             </div>
-                          )}
-                          
-                          {request.assignedEngineerLogin && (
-                            <div className={styles.engineerDetail}>
-                              <span className={styles.detailLabel}>Логин:</span>
-                              <span className={styles.detailValue}>{request.assignedEngineerLogin}</span>
-                            </div>
-                          )}
-                          
-                          {request.assignedAt && (
-                            <div className={styles.engineerDetail}>
-                              <span className={styles.detailLabel}>Назначен:</span>
-                              <span className={styles.detailValue}>
-                                {new Date(request.assignedAt).toLocaleString('ru-RU', {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </span>
-                            </div>
-                          )}
+
+                            {request.assignedEngineerTabNumber && (
+                              <div className={styles.engineerDetail}>
+                                <span className={styles.detailLabel}>Табельный номер:</span>
+                                <span className={styles.detailValue}>{request.assignedEngineerTabNumber}</span>
+                              </div>
+                            )}
+
+                            {request.assignedEngineerLogin && (
+                              <div className={styles.engineerDetail}>
+                                <span className={styles.detailLabel}>Логин:</span>
+                                <span className={styles.detailValue}>{request.assignedEngineerLogin}</span>
+                              </div>
+                            )}
+
+                            {request.assignedAt && (
+                              <div className={styles.engineerDetail}>
+                                <span className={styles.detailLabel}>Назначен:</span>
+                                <span className={styles.detailValue}>
+                                  {new Date(request.assignedAt).toLocaleString('ru-RU', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
+
+                        {/* Кнопка связи (опционально) */}
+                        <button
+                          className={styles.contactEngineerBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Логика связи с инженером (чат, звонок и т.д.)
+                            alert(`Связь с ${request.assignedEngineerFio}`);
+                          }}
+                        >
+                          📞 Связаться
+                        </button>
                       </div>
-                      
-                      {/* Кнопка связи (опционально) */}
-                      <button 
-                        className={styles.contactEngineerBtn}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Логика связи с инженером (чат, звонок и т.д.)
-                          alert(`Связь с ${request.assignedEngineerFio}`);
-                        }}
-                      >
-                        📞 Связаться
-                      </button>
-                    </div>
-                  )}
+                    )}
                 </div>
               )}
             </div>
