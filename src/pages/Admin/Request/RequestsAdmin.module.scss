@@ -1261,3 +1261,218 @@ $breakpoint-mobile: 768px;
   align-items: center;
   gap: 0.5rem;
 }
+
+/* Секция счёта */
+.invoiceSection {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.sectionTitle {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  color: #2c3e50;
+}
+
+/* Кнопка генерации счёта */
+.generateInvoiceBtn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+  
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+/* Детали счёта */
+.invoiceDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.invoiceRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 6px;
+}
+
+.invoiceAmount {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #28a745;
+}
+
+.viewInvoiceLink,
+.viewReceiptLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 500;
+  
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+/* Статус чека */
+.receiptStatus {
+  padding: 0.5rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.receiptUploaded {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.receiptPending {
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Кнопка подтверждения оплаты */
+.confirmPaymentBtn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+  
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(56, 239, 125, 0.4);
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+/* Подтверждённая оплата */
+.paymentConfirmed {
+  padding: 0.75rem;
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+  border-radius: 6px;
+  font-weight: 600;
+  text-align: center;
+}
+
+// В RequestAdmin.module.scss
+
+.pendingSparesAlert {
+  background: linear-gradient(135deg, #fff3cd 0%, #ffe5b4 100%);
+  border: 2px solid #ffc107;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  
+  h3 {
+    color: #856404;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  ul {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 1rem;
+    
+    li {
+      padding: 0.5rem 0;
+      color: #856404;
+      border-bottom: 1px solid rgba(133, 100, 4, 0.2);
+      
+      &:last-child {
+        border-bottom: none;
+      }
+    }
+  }
+  
+  .hint {
+    font-size: 0.85rem;
+    color: #6c757d;
+    font-style: italic;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+  }
+}
+
+.confirmOrdersBtn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  width: 100%;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  }
+}
+
+.assignWorkOrderBtn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  width: 100%;
+  margin-top: 1rem;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(56, 239, 125, 0.4);
+  }
+}

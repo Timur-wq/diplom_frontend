@@ -15,12 +15,12 @@ interface ApprovedItem {
 const ClientDiagnosticActView: React.FC = () => {
   const { actCode } = useParams<{ actCode: string }>();
   const navigate = useNavigate();
-  
+
   const [act, setAct] = useState<DiagnosticActDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  
+
   // Состояние для решений клиента
   const [approvedWorks, setApprovedWorks] = useState<ApprovedItem[]>([]);
   const [approvedSpares, setApprovedSpares] = useState<ApprovedItem[]>([]);
@@ -32,12 +32,12 @@ const ClientDiagnosticActView: React.FC = () => {
 
   const loadAct = async () => {
     if (!actCode) return;
-    
+
     try {
       let response = await authService.fetchWithAuth(
         `https://localhost:7053/api/client/DiagnosticAct/${actCode}`
       );
-      
+
       let data: DiagnosticActDto;
       if (response.ok) {
         data = await response.json();
@@ -79,7 +79,7 @@ const ClientDiagnosticActView: React.FC = () => {
       console.log('ClientDiagnosticActView: base spares', data.spares);
 
       setAct(data);
-      
+
       // 🔥 Инициализируем состояния согласования по recordId
       const initialWorks = data.works.map(w => ({
         recordId: w.recordId,
@@ -100,10 +100,10 @@ const ClientDiagnosticActView: React.FC = () => {
         }
         return acc;
       }, []);
-      
+
       setApprovedWorks(initialWorks);
       setApprovedSpares(uniqueSpares);
-      
+
     } catch (err: any) {
       setError(err.message || 'Ошибка загрузки акта');
     } finally {
@@ -114,14 +114,14 @@ const ClientDiagnosticActView: React.FC = () => {
   // 🔥 Обработчик: клиент меняет решение по работе
   const handleWorkToggle = (work: DiagnosticActWorkItemDto, checked: boolean) => {
     // 1. Обновляем решение по работе
-    setApprovedWorks(prev => 
+    setApprovedWorks(prev =>
       prev.map(w => w.recordId === work.recordId ? { ...w, isApproved: checked } : w)
     );
-    
+
     // 🔥 2. Если работа отклонена — автоматически отклоняем связанные ЗИП
     const linkedSpares = work.requiredSpares || [];
     if (linkedSpares.length) {
-      setApprovedSpares(prev => 
+      setApprovedSpares(prev =>
         prev.map(spare => {
           const isLinked = linkedSpares.some(
             linkedSpare => linkedSpare.recordId === spare.recordId
@@ -135,38 +135,51 @@ const ClientDiagnosticActView: React.FC = () => {
 
   // 🔥 Обработчик: клиент явно меняет решение по ЗИП
   const handleSpareToggle = (recordId: number, checked: boolean) => {
-    setApprovedSpares(prev => 
+    setApprovedSpares(prev =>
       prev.map(s => s.recordId === recordId ? { ...s, isApproved: checked } : s)
     );
   };
 
   // 🔥 Отправка решения на сервер
+  // 🔥 Отправка решения на сервер
   const handleSubmitDecision = async () => {
     if (!act || !actCode) return;
-    
+
+    // 🔥 ОТЛАДКА: Логируем перед отправкой
+    console.log('🔍 Отладка перед отправкой:');
+    console.log('  - approvedWorks:', approvedWorks);
+    console.log('  - approvedSpares:', approvedSpares);
+    console.log('  - approvedSpares.length:', approvedSpares.length);
+    console.log('  - act.spares:', act.spares);
+    console.log('  - act.works.flatMap:', act.works.flatMap(w => w.requiredSpares || []));
+
     const hasApprovedWorks = approvedWorks.some(w => w.isApproved);
     const hasApprovedSpares = approvedSpares.some(s => s.isApproved);
-    
+
     if (!hasApprovedWorks && !hasApprovedSpares && !clientComment.trim()) {
       alert('Пожалуйста, согласуйте хотя бы одну работу/запчасть или укажите причину отказа');
       return;
     }
-    
+
     if (!window.confirm('Отправить ваше решение? Это действие нельзя отменить.')) return;
 
     setSubmitting(true);
-    
+
     try {
+      const payload = {
+        comment: clientComment.trim() || undefined,
+        approvedWorks: approvedWorks,
+        approvedSpares: approvedSpares
+      };
+
+      console.log('📤 Отправляемый payload:', JSON.stringify(payload, null, 2));
+
       const response = await authService.fetchWithAuth(
         `https://localhost:7053/api/client/DiagnosticAct/${actCode}/decision`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            comment: clientComment.trim() || undefined,
-            approvedWorks: approvedWorks,
-            approvedSpares: approvedSpares
-          })
+          body: JSON.stringify(payload)
         }
       );
 
@@ -178,7 +191,7 @@ const ClientDiagnosticActView: React.FC = () => {
       const result = await response.json();
       alert(result.message || 'Ваше решение отправлено!');
       await loadAct();
-      
+
     } catch (err: any) {
       alert(err.message || 'Ошибка при отправке решения');
     } finally {
@@ -278,22 +291,22 @@ const ClientDiagnosticActView: React.FC = () => {
       {/* Результаты диагностики */}
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Результаты диагностики</h2>
-        
+
         <div className={styles.detailItem}>
           <label>Внешнее состояние:</label>
           <p className={styles.textBlock}>{act.externalCondition}</p>
         </div>
-        
+
         <div className={styles.detailItem}>
           <label>Выявленные неисправности:</label>
           <p className={styles.textBlock}>{act.identifiedIssues}</p>
         </div>
-        
+
         <div className={styles.detailItem}>
           <label>Результаты тестов:</label>
           <p className={styles.textBlock}>{act.testResults}</p>
         </div>
-        
+
         <div className={styles.detailItem}>
           <label>Рекомендации:</label>
           <p className={styles.textBlock}>{act.recommendations}</p>
@@ -321,21 +334,21 @@ const ClientDiagnosticActView: React.FC = () => {
             Рекомендуемые работы
             {normalizedStatus === 'SentToClient' && (
               <span className={styles.hint}>
-                Чтобы отказаться от работы, нажмите крестик. 
+                Чтобы отказаться от работы, нажмите крестик.
                 Отказанная работа автоматически скрывает связанные запчасти.
               </span>
             )}
           </h2>
-          
+
           <div className={styles.worksList}>
             {act.works.map((work) => {
               const isChecked = approvedWorks.find(w => w.recordId === work.recordId)?.isApproved ?? true;
               const isDisabled = normalizedStatus !== 'SentToClient';
               const linkedSpares = work.requiredSpares || [];
-              
+
               return (
-                <div 
-                  key={`work-${work.recordId}`} 
+                <div
+                  key={`work-${work.recordId}`}
                   className={`${styles.workItem} ${!isChecked ? styles.rejected : ''}`}
                 >
                   <input
@@ -365,7 +378,7 @@ const ClientDiagnosticActView: React.FC = () => {
                       </div>
                     </div>
                     {work.description && <span className={styles.workDesc}>{work.description}</span>}
-                    
+
                     {/* 🔥 Отображаем привязанные ЗИП с ценами */}
                     {isChecked && linkedSpares.length > 0 && (
                       <div className={styles.linkedSpares}>
@@ -407,7 +420,7 @@ const ClientDiagnosticActView: React.FC = () => {
             {additionalSpares.map((spare) => {
               const isChecked = approvedSpares.find(s => s.recordId === spare.recordId)?.isApproved ?? true;
               const isDisabled = normalizedStatus !== 'SentToClient';
-              
+
               return (
                 <label key={`spare-${spare.recordId}`} className={`${styles.spareItem} ${!isChecked ? styles.rejected : ''}`}>
                   <input
@@ -439,7 +452,7 @@ const ClientDiagnosticActView: React.FC = () => {
       {normalizedStatus === 'SentToClient' && (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>💰 Стоимость работ и запчастей</h2>
-          
+
           <div className={styles.costSummary}>
             {/* Стоимость работ */}
             {act.works.filter(w => approvedWorks.find(aw => aw.recordId === w.recordId)?.isApproved).length > 0 && (
@@ -453,26 +466,26 @@ const ClientDiagnosticActView: React.FC = () => {
                 </span>
               </div>
             )}
-            
+
             {/* Стоимость ЗИП в работах */}
             {act.works
               .filter(w => approvedWorks.find(aw => aw.recordId === w.recordId)?.isApproved)
               .flatMap(w => w.requiredSpares || [])
               .filter(spare => approvedSpares.find(as => as.recordId === spare.recordId)?.isApproved)
               .length > 0 && (
-              <div className={styles.costItem}>
-                <span>Запчасти в работах:</span>
-                <span className={styles.costValue}>
-                  {act.works
-                    .filter(w => approvedWorks.find(aw => aw.recordId === w.recordId)?.isApproved)
-                    .flatMap(w => w.requiredSpares || [])
-                    .filter(spare => approvedSpares.find(as => as.recordId === spare.recordId)?.isApproved)
-                    .reduce((sum, s) => sum + ((s.unitPrice ?? 0) * s.quantity), 0)
-                    .toLocaleString('ru-RU')} ₽
-                </span>
-              </div>
-            )}
-            
+                <div className={styles.costItem}>
+                  <span>Запчасти в работах:</span>
+                  <span className={styles.costValue}>
+                    {act.works
+                      .filter(w => approvedWorks.find(aw => aw.recordId === w.recordId)?.isApproved)
+                      .flatMap(w => w.requiredSpares || [])
+                      .filter(spare => approvedSpares.find(as => as.recordId === spare.recordId)?.isApproved)
+                      .reduce((sum, s) => sum + ((s.unitPrice ?? 0) * s.quantity), 0)
+                      .toLocaleString('ru-RU')} ₽
+                  </span>
+                </div>
+              )}
+
             {/* Стоимость общих ЗИП */}
             {additionalSpares.filter(s => approvedSpares.find(as => as.recordId === s.recordId)?.isApproved).length > 0 && (
               <div className={styles.costItem}>
@@ -485,7 +498,7 @@ const ClientDiagnosticActView: React.FC = () => {
                 </span>
               </div>
             )}
-            
+
             {/* 🔥 ИТОГО */}
             <div className={styles.costTotal}>
               <span><strong>Итого к оплате:</strong></span>
@@ -515,20 +528,20 @@ const ClientDiagnosticActView: React.FC = () => {
       {normalizedStatus !== 'SentToClient' && (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Статус согласования</h2>
-          
+
           {normalizedStatus === 'ApprovedByClient' && (
             <div className={styles.success}>
               ✅ Вы согласовали работы. Ожидайте выполнения.
             </div>
           )}
-          
+
           {normalizedStatus === 'RejectedByClient' && (
             <div className={styles.rejected}>
               ❌ Вы отклонили акт.
               {act.clientComment && <p><strong>Ваш комментарий:</strong> {act.clientComment}</p>}
             </div>
           )}
-          
+
           {act.approvedByClientAt && (
             <p className={styles.timestamp}>
               Статус изменён: {new Date(act.approvedByClientAt).toLocaleString('ru-RU')}

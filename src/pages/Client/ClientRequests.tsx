@@ -15,12 +15,18 @@ const ClientRequests: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // 🔥 ИСПРАВЛЕНО: Добавлены недостающие поля в тип
   const [invoiceInfo, setInvoiceInfo] = useState<Record<number, {
     contractSigned: boolean;
     invoiceGenerated: boolean;
     invoiceFilePath?: string;
     invoiceAmount?: number;
+    paymentReceiptUploaded: boolean;        // ✅ Добавлено
+    paymentReceiptPath?: string;            // ✅ Добавлено
+    isPrepaymentConfirmed: boolean;         // ✅ Добавлено
   } | null>>({});
+
   const [diagnosticActs, setDiagnosticActs] = useState<Record<number, boolean>>({});
 
   // Фильтры
@@ -32,7 +38,100 @@ const ClientRequests: React.FC = () => {
     svtType: ''
   });
 
-  // Добавьте функцию проверки наличия акта:
+  const [uploadingReceipt, setUploadingReceipt] = useState<Record<number, boolean>>({});
+
+  // 🔥 Загрузка чека об оплате
+  const handleUploadReceipt = async (requestId: number, file: File) => {
+    setUploadingReceipt(prev => ({ ...prev, [requestId]: true }));
+
+    try {
+      // Сначала получаем invoiceId
+      const invoiceResponse = await authService.fetchWithAuth(
+        `https://localhost:7053/api/client/Document/request/${requestId}/invoice-info`
+      );
+
+      if (!invoiceResponse.ok) {
+        throw new Error('Не удалось получить информацию о счёте');
+      }
+
+      const invoiceData = await invoiceResponse.json();
+
+      if (!invoiceData.invoiceGenerated) {
+        throw new Error('Счёт ещё не сформирован');
+      }
+
+      // Получаем invoiceId из ответа
+      const invoiceId = invoiceData.invoiceId || requestId;
+
+      // 🔥 Загружаем файл
+      const formData = new FormData();
+      formData.append('receipt', file);
+
+      // 🔥 ИСПРАВЛЕНО: Не устанавливаем Content-Type вручную!
+      // Браузер сам установит multipart/form-data с правильным boundary
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/client/Document/invoice/${invoiceId}/upload-receipt`,
+        {
+          method: 'POST',
+          body: formData
+          // ❌ НЕ добавляйте headers: { 'Content-Type': ... } здесь!
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Не удалось загрузить чек');
+      }
+
+      const result = await response.json();
+      alert('✅ Чек загружен! Ожидайте подтверждения от диспетчера.');
+
+      // 🔥 Перезагружаем информацию о счёте
+      await loadInvoiceInfo(requestId);
+
+    } catch (error: any) {
+      console.error('Ошибка загрузки чека:', error);
+      alert(error.message || 'Ошибка при загрузке чека');
+    } finally {
+      setUploadingReceipt(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  // 🔥 Функция для перехода к просмотру акта
+  const handleViewAct = async (requestId: number) => {
+    try {
+      setSubmitting(true);
+
+      // 🔥 Получаем список актов клиента
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/client/DiagnosticAct/pending`
+      );
+
+      if (!response.ok) {
+        throw new Error('Не удалось загрузить акты');
+      }
+
+      const acts: DiagnosticActDto[] = await response.json();
+
+      // 🔥 Ищем акт для этой заявки
+      const act = acts.find(a => a.requestId === requestId);
+
+      if (!act) {
+        alert('Акт диагностики ещё не готов к просмотру');
+        return;
+      }
+
+      // 🔥 Переходим на страницу акта с actCode
+      navigate(`/client/acts/${act.actCode}`);
+
+    } catch (error: any) {
+      console.error('Ошибка просмотра акта:', error);
+      alert(error.message || 'Не удалось загрузить акт');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const checkDiagnosticAct = async (requestId: number): Promise<boolean> => {
     try {
       const response = await authService.fetchWithAuth(
@@ -40,7 +139,7 @@ const ClientRequests: React.FC = () => {
       );
 
       if (response.ok) {
-        return true;  // Акт существует
+        return true;
       }
       return false;
     } catch {
@@ -48,7 +147,6 @@ const ClientRequests: React.FC = () => {
     }
   };
 
-  // 🔥 Загрузка информации о счёте для заявки
   const loadInvoiceInfo = async (requestId: number) => {
     try {
       const response = await authService.fetchWithAuth(
@@ -67,7 +165,6 @@ const ClientRequests: React.FC = () => {
     }
   };
 
-  // Загрузка заявок
   const loadRequests = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -85,7 +182,6 @@ const ClientRequests: React.FC = () => {
     loadRequests();
   }, [loadRequests]);
 
-  // Фильтрация
   const filteredRequests = useMemo(() => {
     return requests.filter(request => {
       if (filters.status !== 'All' && request.status !== filters.status) return false;
@@ -117,7 +213,6 @@ const ClientRequests: React.FC = () => {
     });
   }, [requests, filters]);
 
-  // Форматирование статуса
   const getStatusLabel = (status: RequestStatus): string => {
     return getRequestStatusLabel(status);
   };
@@ -148,13 +243,11 @@ const ClientRequests: React.FC = () => {
     const isExpanding = expandedId !== id;
     setExpandedId(isExpanding ? id : null);
 
-    // 🔥 При разворачивании загружаем информацию об акте и счёте
     if (isExpanding) {
       checkDiagnosticAct(id).then((hasAct: boolean) => {
         setDiagnosticActs((prev: Record<number, boolean>) => ({ ...prev, [id]: hasAct }));
       });
 
-      // 🔥 Загружаем информацию о счёте
       loadInvoiceInfo(id);
     }
   };
@@ -320,74 +413,131 @@ const ClientRequests: React.FC = () => {
 
                   {expandedId === request.id && (
                     <div className={styles.requestDetails}>
-                      {/* ... остальные поля ... */}
-
-                      {/* 🔥 Кнопка просмотра акта */}
                       {/* 🔥 Кнопка просмотра акта и счёта */}
                       {(request.status === RequestStatus.DiagnosticCompleted ||
                         request.status === RequestStatus.WaitingForClientApproval ||
-                        request.status === RequestStatus.ApprovedByClient) && (  // ✅ Добавили этот статус!
+                        request.status === RequestStatus.ApprovedByClient) && (
                           <div className={styles.actionSection}>
-                            <button
-                              className={styles.viewActBtn}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                // ... существующая логика просмотра акта ...
-                              }}
-                              disabled={submitting}
-                            >
-                              {submitting ? 'Загрузка...' : '📋 Просмотреть акт диагностики'}
-                            </button>
-
-                            {/* 🔥 НОВАЯ КНОПКА: Просмотреть счёт на оплату */}
                             {(() => {
                               const currentInvoiceInfo = invoiceInfo[request.id];
 
-                              return currentInvoiceInfo?.invoiceGenerated ? (
-                                <button
-                                  className={styles.viewInvoiceBtn}
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
+                              return (
+                                <>
+                                  <div className={styles.actionsRow}>
+                                    <button
+                                      className={styles.viewActBtn}
+                                      onClick={async (e) => {
+                                        handleViewAct(request.id);
+                                        e.stopPropagation();
+                                      }}
+                                      disabled={submitting}
+                                    >
+                                      {submitting ? 'Загрузка...' : '📋 Просмотреть акт диагностики'}
+                                    </button>
 
-                                    try {
-                                      // 🔥 Скачиваем файл с токеном авторизации
-                                      const response = await authService.fetchWithAuth(
-                                        `https://localhost:7053/api/client/Document/invoice/${request.id}/download`
-                                      );
+                                    {currentInvoiceInfo?.invoiceGenerated ? (
+                                      <button
+                                        className={styles.viewInvoiceBtn}
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          try {
+                                            const response = await authService.fetchWithAuth(
+                                              `https://localhost:7053/api/client/Document/invoice/${request.id}/download`
+                                            );
 
-                                      if (!response.ok) {
-                                        throw new Error('Не удалось скачать счёт');
-                                      }
+                                            if (!response.ok) throw new Error('Не удалось скачать счёт');
 
-                                      // 🔥 Получаем blob с PDF
-                                      const blob = await response.blob();
+                                            const blob = await response.blob();
+                                            const blobUrl = window.URL.createObjectURL(blob);
+                                            window.open(blobUrl, '_blank');
 
-                                      // 🔥 Создаём URL для blob
-                                      const blobUrl = window.URL.createObjectURL(blob);
+                                            setTimeout(() => {
+                                              window.URL.revokeObjectURL(blobUrl);
+                                            }, 60000);
+                                          } catch (error: any) {
+                                            console.error('Ошибка скачивания счёта:', error);
+                                            alert(error.message || 'Не удалось скачать счёт');
+                                          }
+                                        }}
+                                        title="Скачать счёт на предоплату (только ЗИП)"
+                                      >
+                                        🧾 Просмотреть счёт на оплату
+                                        {currentInvoiceInfo.invoiceAmount && (
+                                          <span className={styles.invoiceAmount}>
+                                            {' '}{currentInvoiceInfo.invoiceAmount.toLocaleString('ru-RU')} ₽
+                                          </span>
+                                        )}
+                                      </button>
+                                    ) : null}
+                                  </div>
 
-                                      // 🔥 Открываем в новой вкладке
-                                      window.open(blobUrl, '_blank');
+                                  {/* 🔥 Секция загрузки чека */}
+                                  {currentInvoiceInfo?.invoiceGenerated && !currentInvoiceInfo.paymentReceiptUploaded && (
+                                    <div className={styles.receiptUploadSection}>
+                                      <div className={styles.sectionTitle}>📄 Загрузить чек об оплате</div>
+                                      <div className={styles.uploadInfo}>
+                                        После оплаты счёта загрузите чек или квитанцию об оплате
+                                      </div>
 
-                                      // 🔥 Очищаем URL через некоторое время
-                                      setTimeout(() => {
-                                        window.URL.revokeObjectURL(blobUrl);
-                                      }, 60000);
+                                      <div className={styles.fileInputWrapper}>
+                                        <label className={styles.fileInputLabel}>
+                                          Выберите файл
+                                          <input
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              if (file) {
+                                                handleUploadReceipt(request.id, file);
+                                              }
+                                            }}
+                                            disabled={uploadingReceipt[request.id]}
+                                            className={styles.fileInput}
+                                          />
+                                        </label>
+                                      </div>
 
-                                    } catch (error: any) {
-                                      console.error('Ошибка скачивания счёта:', error);
-                                      alert(error.message || 'Не удалось скачать счёт');
-                                    }
-                                  }}
-                                  title="Скачать счёт на предоплату (только ЗИП)"
-                                >
-                                  🧾 Просмотреть счёт на оплату
-                                  {currentInvoiceInfo.invoiceAmount && (
-                                    <span className={styles.invoiceAmount}>
-                                      {' '}{currentInvoiceInfo.invoiceAmount.toLocaleString('ru-RU')} ₽
-                                    </span>
+                                      {uploadingReceipt[request.id] && (
+                                        <div className={styles.uploading}>
+                                          <span className={styles.spinner}></span>
+                                          Загрузка...
+                                        </div>
+                                      )}
+                                    </div>
                                   )}
-                                </button>
-                              ) : null;
+
+                                  {/* 🔥 Чек загружен, ожидает подтверждения */}
+                                  {currentInvoiceInfo?.paymentReceiptUploaded && !currentInvoiceInfo.isPrepaymentConfirmed && (
+                                    <div className={styles.receiptPendingSection}>
+                                      <div className={styles.sectionTitle}>📄 Чек об оплате</div>
+                                      <div className={styles.pendingStatus}>✅ Чек загружен</div>
+                                      <div className={styles.pendingText}>
+                                        Ожидайте подтверждения от диспетчера...
+                                      </div>
+                                      {currentInvoiceInfo.paymentReceiptPath && (
+                                        <a
+                                          href={`https://localhost:7053/${currentInvoiceInfo.paymentReceiptPath}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className={styles.viewReceiptLink}
+                                        >
+                                          👁️ Просмотреть чек
+                                        </a>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* 🔥 Оплата подтверждена */}
+                                  {currentInvoiceInfo?.isPrepaymentConfirmed && (
+                                    <div className={styles.paymentConfirmedSection}>
+                                      <div className={styles.sectionTitle}>✅ Оплата подтверждена</div>
+                                      <div className={styles.confirmedText}>
+                                        Предоплата подтверждена диспетчером. Работы начнутся в ближайшее время.
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                              );
                             })()}
                           </div>
                         )}

@@ -1,3 +1,5 @@
+// src/pages/Admin/Request/RequestAdmin.tsx
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { authService } from '../../../services/authService';
 import styles from './RequestsAdmin.module.scss';
@@ -34,9 +36,9 @@ enum RequestStatus {
   Accepted = 'Accepted',
   Rejected = 'Rejected',
   InProgress = 'InProgress',
-  DiagnosticCompleted = 'DiagnosticCompleted', // ✅ ДОБАВЛЕНО для статуса "Диагностика завершена"
-  WaitingForClientApproval = 'WaitingForClientApproval', // ✅ ДОБАВЛЕНО для статуса "Ожидание согласования с клиентом"
-  ApprovedByClient = 'ApprovedByClient', // ✅ ДОБАВЛЕНО для статуса "Согласовано с клиентом"
+  DiagnosticCompleted = 'DiagnosticCompleted',
+  WaitingForClientApproval = 'WaitingForClientApproval',
+  ApprovedByClient = 'ApprovedByClient',
   Completed = 'Completed',
   Cancelled = 'Cancelled'
 }
@@ -59,17 +61,72 @@ const RequestsAdmin: React.FC = () => {
   const [generatingContract, setGeneratingContract] = useState<Record<number, boolean>>({});
   const [signedContracts, setSignedContracts] = useState<Record<number, boolean | undefined>>({});
   const [contractIds, setContractIds] = useState<Record<number, number>>({});
-  // 🔥 Состояние для информации о счёте (по requestId)
+
+  const [spareStatus, setSpareStatus] = useState<{
+    hasPendingOrders: boolean;
+    pendingOrdersCount: number;
+    pendingOrders: Array<{
+      spareName: string;
+      quantity: number;
+      supplierName: string;
+    }>;
+  } | null>(null);
+
+  // После загрузки заявки проверяем статус ЗИП
+  // useEffect(() => {
+  //   if (request?.id && request.status === RequestStatus.ApprovedByClient) {
+  //     checkSpareStatus(request.id);
+  //   }
+  // }, [request?.id, request?.status]);
+
+  const checkSpareStatus = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/request/${requestId}/spare-status`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setSpareStatus(data);
+      }
+    } catch (error) {
+      console.error('Ошибка проверки статуса ЗИП:', error);
+    }
+  };
+
+  const handleConfirmSpareOrders = async () => {
+    if (!spareStatus) return;  // ✅ Добавлена проверка
+
+    if (!window.confirm(`Подтвердить ${spareStatus?.pendingOrdersCount} заявок на ЗИП?`))
+      return;
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/request/${expandedId}/confirm-spare-orders`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) throw new Error('Ошибка при подтверждении');
+
+      alert('✅ Заявки на ЗИП отправлены в ОМТС. Ожидайте поступления.');
+      setSpareStatus(null);
+      loadRequests();  // ✅ Исправлено: было loadRequest
+    } catch (error: any) {
+      alert(error.message || 'Ошибка при подтверждении заявок');
+    }
+  };
+
+  // 🔥 ИСПРАВЛЕНО: Добавлено поле receiptPath
   const [invoiceInfo, setInvoiceInfo] = useState<Record<number, {
     invoiceId?: number;
     generated: boolean;
     amount?: number;
     filePath?: string;
     receiptUploaded: boolean;
+    receiptPath?: string;  // ✅ Добавлено
     isPaid: boolean;
   } | null>>({});
 
-  // 🔥 Состояние для загрузки/генерации
   const [generatingInvoice, setGeneratingInvoice] = useState<Record<number, boolean>>({});
   const [confirmingPayment, setConfirmingPayment] = useState<Record<number, boolean>>({});
 
@@ -82,7 +139,23 @@ const RequestsAdmin: React.FC = () => {
     svtType: ''
   });
 
+  const [assignModal, setAssignModal] = useState<{
+    isOpen: boolean;
+    requestId: number | null;
+    engineer: {
+      fio?: string;
+      tabNumber?: string;
+      specialization?: string;
+    } | null;
+  }>({
+    isOpen: false,
+    requestId: null,
+    engineer: null
+  });
 
+  const [assigningId, setAssigningId] = useState<number | null>(null);
+  const [diagnosticActs, setDiagnosticActs] = useState<Record<number, boolean>>({});
+  const navigate = useNavigate();
 
   // Функция для проверки статуса подписания при загрузке:
   const checkContractSigned = async (requestId: number) => {
@@ -97,7 +170,6 @@ const RequestsAdmin: React.FC = () => {
           ...prev,
           [requestId]: contract.isSignedByClient
         }));
-        // 🔥 Сохраняем contractId
         if (contract.contractId) {
           setContractIds(prev => ({
             ...prev,
@@ -106,9 +178,7 @@ const RequestsAdmin: React.FC = () => {
         }
       }
     } catch (error) {
-      // Договор ещё не создан
       console.log(`Договор для заявки ${requestId} ещё не создан`);
-      // 🔥 Устанавливаем undefined — значит договор ещё не создан
       setSignedContracts(prev => ({
         ...prev,
         [requestId]: undefined
@@ -116,7 +186,6 @@ const RequestsAdmin: React.FC = () => {
     }
   };
 
-  // Функция для отметки договора как подписанного:
   // Функция для отметки договора как подписанного:
   const handleMarkContractSigned = async (requestId: number) => {
     const contractId = contractIds[requestId];
@@ -165,19 +234,16 @@ const RequestsAdmin: React.FC = () => {
 
       const result = await response.json();
 
-      // 🔥 Открываем договор в новой вкладке
       const contractUrl = `https://localhost:7053/${result.contract.filePath}`;
       window.open(contractUrl, '_blank', 'noopener,noreferrer');
 
       alert('✅ Договор сформирован и открыт в новой вкладке');
 
-      // 🔥 ИСПРАВЛЕНИЕ: Сохраняем И contractId, И статус
       setSignedContracts(prev => ({
         ...prev,
-        [requestId]: false  // false = создан, но не подписан
+        [requestId]: false
       }));
 
-      // 🔥 СОХРАНЯЕМ contractId!
       if (result.contract.contractId) {
         setContractIds(prev => ({
           ...prev,
@@ -195,26 +261,6 @@ const RequestsAdmin: React.FC = () => {
     }
   };
 
-  const [assignModal, setAssignModal] = useState<{
-    isOpen: boolean;
-    requestId: number | null;
-    engineer: {
-      fio?: string;
-      tabNumber?: string;
-      specialization?: string;
-    } | null;
-  }>({
-    isOpen: false,
-    requestId: null,
-    engineer: null
-  });
-
-  const [assigningId, setAssigningId] = useState<number | null>(null);
-  const [diagnosticActs, setDiagnosticActs] = useState<Record<number, boolean>>({});
-  const navigate = useNavigate();
-
-  // ✅ Открыть модальное окно назначения
-  // ✅ Открыть модальное окно назначения с загрузкой кандидатов
   const handleOpenAssignModal = async (requestId: number, workId: number = 1) => {
     const request = allRequests.find(r => r.id === requestId);
     if (!request) return;
@@ -226,7 +272,6 @@ const RequestsAdmin: React.FC = () => {
     });
 
     try {
-      // 🔥 Загружаем кандидатов с бэкенда
       const response = await authService.fetchWithAuth(
         `https://localhost:7053/api/Task/candidates/${workId}?svtModel=${encodeURIComponent(request.model)}`
       );
@@ -235,7 +280,6 @@ const RequestsAdmin: React.FC = () => {
         const candidates = await response.json();
 
         if (candidates.length > 0) {
-          // Берём первого кандидата (с наименьшей загрузкой)
           const bestCandidate = candidates[0];
 
           setAssignModal(prev => ({
@@ -243,7 +287,7 @@ const RequestsAdmin: React.FC = () => {
             engineer: {
               fio: bestCandidate.fio,
               tabNumber: bestCandidate.tabNumber.toString(),
-              specialization: '' // Можно добавить поле в DTO
+              specialization: ''
             }
           }));
         } else {
@@ -256,7 +300,6 @@ const RequestsAdmin: React.FC = () => {
     }
   };
 
-  // ✅ Закрыть модальное окно
   const handleCloseAssignModal = () => {
     setAssignModal({
       isOpen: false,
@@ -265,14 +308,12 @@ const RequestsAdmin: React.FC = () => {
     });
   };
 
-  // ✅ Подтвердить назначение (реальный запрос к бэкенду)
   const handleConfirmAssign = async () => {
     if (!assignModal.requestId || !assignModal.engineer) return;
 
     setAssigningId(assignModal.requestId);
 
     try {
-      // 🔥 Реальный запрос к API
       const response = await authService.fetchWithAuth(
         'https://localhost:7053/api/Task/assign',
         {
@@ -281,9 +322,9 @@ const RequestsAdmin: React.FC = () => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            workId: 1,  // 🔴 Замените на реальный workId из заявки!
+            workId: 1,
             requestId: assignModal.requestId,
-            maxActiveOrders: 2  // Лимит активных нарядов на инженера
+            maxActiveOrders: 2
           }),
         }
       );
@@ -297,7 +338,6 @@ const RequestsAdmin: React.FC = () => {
 
       console.log('✅ Наряд назначен:', result);
 
-      // 🔥 Обновляем локальный стейт с данными от сервера
       setAllRequests(prev => prev.map(req =>
         req.id === assignModal.requestId
           ? {
@@ -305,14 +345,14 @@ const RequestsAdmin: React.FC = () => {
             assignedEngineerFio: result.engineerName || assignModal.engineer!.fio,
             assignedEngineerTabNumber: result.assignedEngineerId,
             assignedAt: result.assignedAt || new Date().toISOString(),
-            status: RequestStatus.InProgress  // Меняем статус на "В работе"
+            status: RequestStatus.InProgress
           }
           : req
       ));
 
       alert('✅ Специалист назначен!');
       handleCloseAssignModal();
-      refreshData();  // Перезагружаем данные с сервера
+      refreshData();
 
     } catch (error: any) {
       console.error('❌ Ошибка назначения:', error);
@@ -322,10 +362,8 @@ const RequestsAdmin: React.FC = () => {
     }
   };
 
-  // Статистика
   const [stats, setStats] = useState<Record<string, number>>({});
 
-  // Загрузка заявок
   const loadRequests = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -339,7 +377,6 @@ const RequestsAdmin: React.FC = () => {
 
       const data: any[] = await response.json();
 
-      // ✅ Конвертируем числовые статусы в строки
       const statusMap: Record<number, RequestStatus> = {
         0: RequestStatus.New,
         1: RequestStatus.Accepted,
@@ -357,8 +394,6 @@ const RequestsAdmin: React.FC = () => {
         status: typeof item.status === 'number'
           ? statusMap[item.status] || RequestStatus.New
           : item.status,
-
-        // ✅ Маппинг полей назначенного специалиста (если бэкенд возвращает их иначе)
         assignedEngineerTabNumber: item.assignedEngineerTabNumber || item.serviceEngineerTabNumber,
         assignedEngineerFio: item.assignedEngineerFio || item.assignedEngineerName,
         assignedAt: item.assignedAt || item.taskAssignedAt
@@ -372,7 +407,6 @@ const RequestsAdmin: React.FC = () => {
     }
   }, []);
 
-  // Загрузка статистики
   const loadStats = useCallback(async () => {
     try {
       const response = await authService.fetchWithAuth(
@@ -387,7 +421,6 @@ const RequestsAdmin: React.FC = () => {
     }
   }, []);
 
-  // Перезагрузка после изменения статуса
   const refreshData = useCallback(() => {
     loadRequests();
     loadStats();
@@ -398,7 +431,6 @@ const RequestsAdmin: React.FC = () => {
     loadStats();
   }, [loadRequests, loadStats]);
 
-  // 🔥 КЛИЕНТСКАЯ ФИЛЬТРАЦИЯ
   const filteredRequests = useMemo(() => {
     return allRequests.filter(request => {
       if (filters.status !== 'All' && request.status !== filters.status) {
@@ -440,7 +472,6 @@ const RequestsAdmin: React.FC = () => {
     });
   }, [allRequests, filters]);
 
-  // Статистика по отфильтрованным данным
   const filteredStats = useMemo(() => {
     return filteredRequests.reduce((acc, req) => {
       acc[req.status] = (acc[req.status] || 0) + 1;
@@ -448,23 +479,28 @@ const RequestsAdmin: React.FC = () => {
     }, {} as Record<string, number>);
   }, [filteredRequests]);
 
-  // Развернуть/свернуть аккордеон
   const toggleExpand = (id: number) => {
     const isExpanding = expandedId !== id;
     setExpandedId(isExpanding ? id : null);
+    setSpareStatus(null);  // ✅ Сбрасываем статус при сворачивании
 
     if (isExpanding) {
       checkDiagnosticAct(id).then(hasAct => {
         setDiagnosticActs(prev => ({ ...prev, [id]: hasAct }));
       });
-
-      // 🔥 Загружаем информацию о договоре и счёте
       checkContractSigned(id);
       loadInvoiceInfo(id);
+
+      // ✅ Проверяем статус ЗИП только если заявка в статусе ApprovedByClient
+      const request = allRequests.find(r => r.id === id);
+      if (request?.status === RequestStatus.ApprovedByClient) {
+        checkSpareStatus(id);
+      }
     }
   };
 
-  // 🔥 Загрузка информации о счёте
+
+
   const loadInvoiceInfo = async (requestId: number) => {
     try {
       const response = await authService.fetchWithAuth(
@@ -481,6 +517,7 @@ const RequestsAdmin: React.FC = () => {
             amount: data.amount,
             filePath: data.filePath,
             receiptUploaded: data.receiptUploaded,
+            receiptPath: data.receiptPath,  // ✅ Добавлено
             isPaid: data.isPaid
           }
         }));
@@ -490,7 +527,6 @@ const RequestsAdmin: React.FC = () => {
     }
   };
 
-  // 🔥 Генерация счёта на предоплату
   const handleGenerateInvoice = async (requestId: number) => {
     if (!window.confirm('Сформировать счёт на предоплату для заявки #' + requestId + '?')) return;
 
@@ -509,13 +545,11 @@ const RequestsAdmin: React.FC = () => {
 
       const result = await response.json();
 
-      // 🔥 Открываем счёт в новой вкладке
       const invoiceUrl = `https://localhost:7053/${result.invoice.filePath}`;
       window.open(invoiceUrl, '_blank', 'noopener,noreferrer');
 
       alert('✅ Счёт сформирован и открыт в новой вкладке');
 
-      // 🔥 Обновляем состояние
       setInvoiceInfo(prev => ({
         ...prev,
         [requestId]: {
@@ -524,6 +558,7 @@ const RequestsAdmin: React.FC = () => {
           amount: result.invoice.amount,
           filePath: result.invoice.filePath,
           receiptUploaded: false,
+          receiptPath: undefined,
           isPaid: false
         }
       }));
@@ -536,7 +571,6 @@ const RequestsAdmin: React.FC = () => {
     }
   };
 
-  // 🔥 Подтверждение предоплаты
   const handleConfirmPrepayment = async (requestId: number) => {
     const invoice = invoiceInfo[requestId];
     if (!invoice?.invoiceId) {
@@ -558,7 +592,6 @@ const RequestsAdmin: React.FC = () => {
         throw new Error('Не удалось подтвердить предоплату');
       }
 
-      // 🔥 Обновляем состояние
       setInvoiceInfo(prev => ({
         ...prev,
         [requestId]: prev[requestId] ? { ...prev[requestId]!, isPaid: true } : null
@@ -566,7 +599,6 @@ const RequestsAdmin: React.FC = () => {
 
       alert('✅ Предоплата подтверждена! Работы могут начинаться.');
 
-      // 🔥 Обновляем статус заявки (опционально)
       refreshData();
 
     } catch (error: any) {
@@ -577,7 +609,6 @@ const RequestsAdmin: React.FC = () => {
     }
   };
 
-  // Принять заявку
   const handleAccept = async (id: number) => {
     if (!window.confirm('Принять заявку в работу?')) return;
 
@@ -602,7 +633,6 @@ const RequestsAdmin: React.FC = () => {
     }
   };
 
-  // Отклонить заявку
   const handleReject = async (id: number) => {
     const reason = rejectionReason[id]?.trim();
 
@@ -638,7 +668,6 @@ const RequestsAdmin: React.FC = () => {
     }
   };
 
-  // Сброс фильтров
   const handleResetFilters = () => {
     setFilters({
       status: 'All',
@@ -649,16 +678,15 @@ const RequestsAdmin: React.FC = () => {
     });
   };
 
-  // Форматирование статуса
   const getStatusLabel = (status: RequestStatus): string => {
     const labels: Record<RequestStatus, string> = {
       [RequestStatus.New]: 'Новая',
       [RequestStatus.Accepted]: 'Принята',
       [RequestStatus.Rejected]: 'Отклонена',
       [RequestStatus.InProgress]: 'В работе',
-      [RequestStatus.DiagnosticCompleted]: 'Диагностика завершена', // ✅ Новый статус
-      [RequestStatus.WaitingForClientApproval]: 'Ожидание согласования с клиентом', // ✅ Новый статус
-      [RequestStatus.ApprovedByClient]: 'Согласовано с клиентом', // ✅ Новый статус
+      [RequestStatus.DiagnosticCompleted]: 'Диагностика завершена',
+      [RequestStatus.WaitingForClientApproval]: 'Ожидание согласования с клиентом',
+      [RequestStatus.ApprovedByClient]: 'Согласовано с клиентом',
       [RequestStatus.Completed]: 'Завершена',
       [RequestStatus.Cancelled]: 'Отменена'
     };
@@ -680,19 +708,15 @@ const RequestsAdmin: React.FC = () => {
     return classes[status] || '';
   };
 
-  // Функция форматирования телефона
   const formatPhone = (phone: string) => {
     if (!phone) return '';
 
-    // Удаляем все нецифровые символы
     const digits = phone.replace(/\D/g, '');
 
-    // Проверяем, что есть 11 цифр (российский формат)
     if (digits.length !== 11) {
-      return phone; // Возвращаем как есть, если формат не совпадает
+      return phone;
     }
 
-    // Форматируем: +0 (000) 000-00-00
     return `+${digits[0]} (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9, 11)}`;
   };
 
@@ -704,7 +728,6 @@ const RequestsAdmin: React.FC = () => {
     return <div className={styles.error}>Ошибка: {error}</div>;
   }
 
-  // В компоненте добавьте функцию проверки наличия акта:
   const checkDiagnosticAct = async (requestId: number) => {
     try {
       const response = await authService.fetchWithAuth(
@@ -712,7 +735,7 @@ const RequestsAdmin: React.FC = () => {
       );
 
       if (response.ok) {
-        return true;  // Акт существует
+        return true;
       }
       return false;
     } catch {
@@ -881,8 +904,6 @@ const RequestsAdmin: React.FC = () => {
 
               {expandedId === request.id && (
                 <div className={styles.requestDetails}>
-                  {/* DEBUG: Показываем текущий статус */}
-
                   <div className={styles.detailsGrid}>
                     <div className={styles.detailItem}>
                       <label>Клиент:</label>
@@ -932,7 +953,6 @@ const RequestsAdmin: React.FC = () => {
                     </div>
                   )}
 
-                  {/* ✅ Кнопки действий для НОВЫХ заявок */}
                   {request.status === RequestStatus.New && (
                     <div className={styles.actionButtons}>
                       <button
@@ -972,12 +992,10 @@ const RequestsAdmin: React.FC = () => {
                         </button>
                       </div>
 
-                      {/* ✅ Кнопка назначения специалиста */}
                       <button
                         className={styles.assignBtn}
                         onClick={(e) => {
                           e.stopPropagation();
-                          // workId = 1 (Диагностика) - замените на реальное значение
                           handleOpenAssignModal(request.id, 1);
                         }}
                         disabled={assigningId === request.id}
@@ -993,8 +1011,6 @@ const RequestsAdmin: React.FC = () => {
                       </button>
                     </div>
                   )}
-                  {/* ✅ Кнопка формирования договора - появляется после согласования клиентом */}
-
 
                   {diagnosticActs[request.id] && (
                     <div className={styles.actionButtons}>
@@ -1008,7 +1024,6 @@ const RequestsAdmin: React.FC = () => {
                         📋 Акт диагностики
                       </button>
 
-                      {/* Кнопка формирования договора */}
                       {!signedContracts[request.id] && (
                         <button
                           className={styles.contractBtn}
@@ -1021,8 +1036,6 @@ const RequestsAdmin: React.FC = () => {
                         </button>
                       )}
 
-                      {/* 🔥 Чекбокс подписания — показывается если договор создан */}
-                      {/* 🔥 Чекбокс подписания — показывается если договор создан */}
                       {signedContracts[request.id] !== undefined && (
                         <label className={styles.signedCheckbox}>
                           <input
@@ -1033,7 +1046,7 @@ const RequestsAdmin: React.FC = () => {
                                 handleMarkContractSigned(request.id);
                               }
                             }}
-                            disabled={signedContracts[request.id]} // Нельзя снять галочку
+                            disabled={signedContracts[request.id]}
                           />
                           <span>
                             {signedContracts[request.id] ? '✅ Договор подписан' : '☑️ Отметить как подписанный'}
@@ -1042,12 +1055,11 @@ const RequestsAdmin: React.FC = () => {
                       )}
                     </div>
                   )}
-                  {/* 🔥 СЕКЦИЯ СЧЁТА — появляется после подписания договора */}
+
                   {signedContracts[request.id] === true && (
                     <div className={styles.invoiceSection}>
                       <div className={styles.sectionTitle}>🧾 Счёт на предоплату</div>
 
-                      {/* Если счёт ещё не сформирован */}
                       {!invoiceInfo[request.id]?.generated && (
                         <button
                           className={styles.generateInvoiceBtn}
@@ -1065,7 +1077,6 @@ const RequestsAdmin: React.FC = () => {
                         </button>
                       )}
 
-                      {/* Если счёт сформирован */}
                       {invoiceInfo[request.id]?.generated && (
                         <div className={styles.invoiceDetails}>
                           <div className={styles.invoiceRow}>
@@ -1075,7 +1086,6 @@ const RequestsAdmin: React.FC = () => {
                             </span>
                           </div>
 
-                          {/* Кнопка просмотра счёта */}
                           {invoiceInfo[request.id]?.filePath && (
                             <a
                               href={`https://localhost:7053/${invoiceInfo[request.id]?.filePath}`}
@@ -1087,12 +1097,51 @@ const RequestsAdmin: React.FC = () => {
                             </a>
                           )}
 
-                          {/* Статус чека */}
                           <div className={styles.receiptStatus}>
                             {invoiceInfo[request.id]?.receiptUploaded ? (
-                              <span className={styles.receiptUploaded}>
-                                ✅ Чек загружен клиентом
-                              </span>
+                              <>
+                                <span className={styles.receiptUploaded}>
+                                  ✅ Чек загружен клиентом
+                                </span>
+                                {invoiceInfo[request.id]?.receiptUploaded && (
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        // 🔥 Скачиваем файл с токеном авторизации
+                                        const response = await authService.fetchWithAuth(
+                                          `https://localhost:7053/api/dispatcher/Document/invoice/${request.id}/receipt/download`
+                                        );
+
+                                        if (!response.ok) {
+                                          throw new Error('Не удалось скачать чек');
+                                        }
+
+                                        // 🔥 Получаем blob
+                                        const blob = await response.blob();
+
+                                        // 🔥 Создаём URL для blob
+                                        const blobUrl = window.URL.createObjectURL(blob);
+
+                                        // 🔥 Открываем в новой вкладке
+                                        window.open(blobUrl, '_blank');
+
+                                        // 🔥 Очищаем URL через некоторое время
+                                        setTimeout(() => {
+                                          window.URL.revokeObjectURL(blobUrl);
+                                        }, 60000);
+
+                                      } catch (error: any) {
+                                        console.error('Ошибка скачивания чека:', error);
+                                        alert(error.message || 'Не удалось скачать чек');
+                                      }
+                                    }}
+                                    className={styles.viewReceiptLink}
+                                  >
+                                    👁️ Просмотреть чек
+                                  </button>
+                                )}
+                              </>
                             ) : (
                               <span className={styles.receiptPending}>
                                 ⏳ Ожидается загрузка чека от клиента
@@ -1100,7 +1149,6 @@ const RequestsAdmin: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Кнопка подтверждения предоплаты */}
                           {!invoiceInfo[request.id]?.isPaid && invoiceInfo[request.id]?.receiptUploaded && (
                             <button
                               className={styles.confirmPaymentBtn}
@@ -1118,7 +1166,6 @@ const RequestsAdmin: React.FC = () => {
                             </button>
                           )}
 
-                          {/* Если предоплата подтверждена */}
                           {invoiceInfo[request.id]?.isPaid && (
                             <div className={styles.paymentConfirmed}>
                               ✅ Предоплата подтверждена — работы могут начинаться
@@ -1126,10 +1173,47 @@ const RequestsAdmin: React.FC = () => {
                           )}
                         </div>
                       )}
+
+                      {request?.status === RequestStatus.ApprovedByClient && (
+                        <div className={styles.actionSection}>
+                          {spareStatus?.hasPendingOrders ? (
+                            // 🔥 ЕСТЬ неподтверждённые заявки → показываем кнопку отправки в ОМТС
+                            <div className={styles.pendingSparesAlert}>
+                              <h3>⚠️ Требуется закупка ЗИП:</h3>
+                              <ul>
+                                {spareStatus.pendingOrders.map((order, idx) => (
+                                  <li key={idx}>
+                                    {order.spareName} × {order.quantity} шт.
+                                    ({order.supplierName})
+                                  </li>
+                                ))}
+                              </ul>
+
+                              <button
+                                className={styles.confirmOrdersBtn}
+                                onClick={handleConfirmSpareOrders}
+                              >
+                                📦 Отправить заявку на ЗИП в ОМТС
+                              </button>
+
+                              <p className={styles.hint}>
+                                После поступления ЗИП на склад станет доступна кнопка
+                                "Назначить наряд"
+                              </p>
+                            </div>
+                          ) : (
+                            // 🔥 НЕТ неподтверждённых заявок → все ЗИП на складе
+                            <button
+                              className={styles.assignWorkOrderBtn}
+                            >
+                              🔧 Назначить наряд на ремонт
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* ✅ Отображение назначенного специалиста */}
                   {(request.assignedEngineerFio) &&
                     request.status !== RequestStatus.New && (
                       <div className={styles.assignedEngineer}>
@@ -1178,12 +1262,10 @@ const RequestsAdmin: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Кнопка связи (опционально) */}
                         <button
                           className={styles.contactEngineerBtn}
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Логика связи с инженером (чат, звонок и т.д.)
                             alert(`Связь с ${request.assignedEngineerFio}`);
                           }}
                         >
@@ -1204,8 +1286,6 @@ const RequestsAdmin: React.FC = () => {
         </div>
       )}
 
-      {/* ✅ Модальное окно подтверждения назначения */}
-
       {assignModal.isOpen && (
         <div className={styles.modalOverlay} onClick={handleCloseAssignModal}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -1218,13 +1298,11 @@ const RequestsAdmin: React.FC = () => {
 
             <div className={styles.modalBody}>
               {!assignModal.engineer ? (
-                // 🔵 Показываем загрузку
                 <div className={styles.loadingContainer}>
                   <div className={styles.spinner}></div>
                   <p>Загрузка доступных специалистов...</p>
                 </div>
               ) : (
-                // ✅ Показываем данные специалиста
                 <>
                   <p className={styles.modalText}>
                     Система автоматически подобрала специалиста для выполнения диагностики:

@@ -101,8 +101,8 @@ class AuthService {
   }
 
   /**
-   * Fetch с автоматической авторизацией и обновлением токена
-   */
+ * Fetch с автоматической авторизацией и обновлением токена
+ */
   async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
     let token = this.getAccessToken();
 
@@ -118,10 +118,19 @@ class AuthService {
       }
     }
 
-    const headers = {
-      ...options.headers,
-      'Content-Type': 'application/json',
+    // 🔥 ИСПРАВЛЕНО: Не переопределяем Content-Type для FormData
+    const isFormData = options.body instanceof FormData;
+
+    const headers: HeadersInit = {
       ...(token && { 'Authorization': `Bearer ${token}` }),
+      // 🔥 Только для JSON устанавливаем Content-Type
+      ...(!isFormData && { 'Content-Type': 'application/json' }),
+      // 🔥 Копируем остальные заголовки из options (кроме Content-Type)
+      ...Object.fromEntries(
+        Object.entries(options.headers || {}).filter(
+          ([key]) => key.toLowerCase() !== 'content-type'
+        )
+      ),
     };
 
     const response = await fetch(url, { ...options, headers });
@@ -130,11 +139,18 @@ class AuthService {
     if (response.status === 401 && !url.includes('/auth/')) {
       try {
         const newTokens = await this.refreshToken();
-        const retryHeaders = {
-          ...options.headers,
-          'Content-Type': 'application/json',
+
+        // 🔥 Повторяем ту же логику для заголовков при повторном запросе
+        const retryHeaders: HeadersInit = {
           'Authorization': `Bearer ${newTokens.accessToken}`,
+          ...(!isFormData && { 'Content-Type': 'application/json' }),
+          ...Object.fromEntries(
+            Object.entries(options.headers || {}).filter(
+              ([key]) => key.toLowerCase() !== 'content-type'
+            )
+          ),
         };
+
         return fetch(url, { ...options, headers: retryHeaders });
       } catch {
         this.clearAuth();

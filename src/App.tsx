@@ -16,6 +16,7 @@ import ClientRequests from './pages/Client/ClientRequests';
 import ClientLayout from './pages/Client/ClientLayout';
 import DiagnosticActView from './pages/Admin/DiagnosticActView';
 import ClientDiagnosticActView from './pages/Client/ClientDiagnosticActView';
+import GoodsReceiptPage from './pages/Omt/GoodsRecieptPage';
 
 
 function App() {
@@ -24,7 +25,7 @@ function App() {
       <Routes>
         <Route path="/register" element={<Registration />} />
         <Route path="/login" element={<Login />} />
-        
+
         <Route path='/act' element={<DiagnosticActForm />} />
 
         {/* Личный кабинет клиента */}
@@ -32,7 +33,7 @@ function App() {
           <Route index element={<Navigate to="/client/requests" replace />} />
           <Route path="requests" element={<ClientRequests />} />
           <Route path="repairRequest" element={<RequestForm />} />
-          <Route     path="/client/acts/:actCode"     element={<ClientDiagnosticActView />} />
+          <Route path="/client/acts/:actCode" element={<ClientDiagnosticActView />} />
         </Route>
 
         {/* другие маршруты */}
@@ -54,6 +55,14 @@ function App() {
             <DiagnosticActView />
           </ProtectedRoute>
         } />
+
+        <Route
+          path="/omt/requests"
+          element={
+            <ProtectedRoute roles={[UserRole.OmtEmployee]}>
+              <GoodsReceiptPage />
+            </ProtectedRoute>
+          } />
 
         <Route path="/engineer" element={<EngineerDashboard />} />
         {/* Форма акта диагностики (по taskId) */}
