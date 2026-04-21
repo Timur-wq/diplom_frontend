@@ -2,7 +2,7 @@ import React from 'react';
 import logo from './logo.svg';
 import './App.css';
 import Login from './pages/Login/login';
-import Registration from './pages/Register/Registration';
+import Registration from './pages/Register/Register';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import RequestForm from './pages/RepairRequest/RepairRequest';
 import ProtectedRoute from './pages/Login/ProtectedRoute';

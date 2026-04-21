@@ -8,6 +8,53 @@ import styles from './ClientRequests.module.scss';
 import { authService } from '../../services/authService';
 import { DiagnosticActDto } from '../../types/diagnostic';
 
+// Тип для актов
+interface TaskActs {
+  actId?: number;  // ← 🔥 ДОБАВЬТЕ ЭТО ПОЛЕ!
+  repairActPath?: string;
+  spareWriteOffPath?: string;
+  createdAt?: string;
+}
+
+interface RequestAdditionalInfo {
+  contractSigned: boolean;
+  invoiceGenerated: boolean;
+  invoiceFilePath?: string;
+  invoiceAmount?: number;
+  paymentReceiptUploaded: boolean;
+  paymentReceiptPath?: string;
+  isPrepaymentConfirmed: boolean;
+
+  // 🔥 Добавьте эти поля:
+  warrantyExists?: boolean;
+  warrantyFilePath?: string;
+  warrantyValidUntil?: string;
+
+  // 🔥 Финальный счёт на оплату работ
+  finalInvoiceGenerated?: boolean;
+  finalInvoiceFilePath?: string;
+  finalInvoiceAmount?: number;
+  finalPaymentReceiptUploaded: boolean;
+  finalPaymentReceiptPath?: string;
+  isFinalPaymentConfirmed: boolean;
+}
+
+// Тип для статуса подписи
+interface ActSignatureStatus {
+  actId: number;
+  isSignedByClient: boolean;
+  clientSignedAt?: string;
+  clientSignatureMethod?: string;
+  clientVerificationData?: string;
+  isSignedByDispatcher: boolean;
+  dispatcherSignedAt?: string;
+  dispatcherSignedByTabNumber?: number;
+  dispatcherVerificationData?: string;
+  isVerifiedByDispatcher: boolean;
+  isFullySigned: boolean;
+}
+
+
 const ClientRequests: React.FC = () => {
   const navigate = useNavigate();
   const [requests, setRequests] = useState<ClientRequest[]>([]);
@@ -16,15 +63,177 @@ const ClientRequests: React.FC = () => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // 🔥 ИСПРАВЛЕНО: Добавлены недостающие поля в тип
+  // Состояние
+  const [actSignatureStatus, setActSignatureStatus] = useState<Record<number, ActSignatureStatus>>({});
+
+  // 🔥 НОВОЕ: Состояние для актов
+  const [taskActs, setTaskActs] = useState<Record<number, TaskActs>>({});
+
+  // Функция загрузки статуса
+  const loadActSignatureStatus = async (actId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/client/acts/${actId}/status`
+      );
+      if (response.ok) {
+        const status: ActSignatureStatus = await response.json();
+        setActSignatureStatus(prev => ({ ...prev, [actId]: status }));
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки статуса подписи:', error);
+    }
+  };
+
+  const loadFinalInvoiceInfo = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/client/Document/request/${requestId}/final-invoice-info`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+
+        setInvoiceInfo(prev => {
+          const current = prev[requestId];
+
+          const baseInfo = current ?? {
+            contractSigned: false,
+            invoiceGenerated: false,
+            paymentReceiptUploaded: false,
+            isPrepaymentConfirmed: false,
+            warrantyExists: false
+          };
+
+          return {
+            ...prev,
+            [requestId]: {
+              ...baseInfo,
+              finalInvoiceGenerated: data.invoiceGenerated,
+              finalInvoiceFilePath: data.invoiceFilePath,
+              finalInvoiceAmount: data.invoiceAmount,
+              finalPaymentReceiptUploaded: data.paymentReceiptUploaded,
+              finalPaymentReceiptPath: data.paymentReceiptPath,
+              isFinalPaymentConfirmed: data.isPaymentConfirmed
+            }
+          };
+        });
+      }
+    } catch (error) {
+      console.error(`Ошибка загрузки информации о финальном счёте для заявки ${requestId}:`, error);
+    }
+  };
+
+  const handleUploadFinalInvoiceReceipt = async (requestId: number, file: File) => {
+    setUploadingReceipt(prev => ({ ...prev, [requestId]: true }));
+
+    try {
+      const formData = new FormData();
+      formData.append('receipt', file);
+
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/client/Document/request/${requestId}/final-invoice/upload-receipt`,
+        {
+          method: 'POST',
+          body: formData
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Не удалось загрузить чек');
+      }
+
+      alert('✅ Чек загружен! Ожидайте подтверждения от диспетчера.');
+      await loadFinalInvoiceInfo(requestId);
+
+    } catch (error: any) {
+      console.error('Ошибка загрузки чека:', error);
+      alert(error.message || 'Ошибка при загрузке чека');
+    } finally {
+      setUploadingReceipt(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  const handleClientSignAct = async (requestId: number) => {
+    if (!window.confirm('Подписать Акт выполненных работ простой электронной подписью?')) return;
+
+    try {
+      // Получаем actId через запрос статуса
+      const statusResponse = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/acts/signature-status`
+      );
+
+      if (!statusResponse.ok) throw new Error('Не удалось получить статус акта');
+
+      const status = await statusResponse.json();
+
+      // Подписываем
+      await authService.fetchWithAuth(
+        `https://localhost:7053/api/client/acts/${status.actId}/client-sign`,
+        { method: 'POST' }
+      );
+
+      alert('✅ Акт подписан!');
+      loadActSignatureStatus(status.actId);
+    } catch (e: any) {
+      alert(e.message || 'Ошибка');
+    }
+  };
+
+  // Функция подписания акта клиентом
+  // Функция подписания акта клиентом
+  // Функция подписания акта клиентом
+  const handleSignAct = async (requestId: number) => {
+    if (!window.confirm('Подписать Акт выполненных работ?')) return;
+
+    try {
+      // 🔥 Получаем actId из taskActs
+      const actId = taskActs[requestId]?.actId;
+
+      if (!actId) {
+        throw new Error('Не удалось найти ID акта');
+      }
+
+      console.log('📝 [Подписание] requestId:', requestId, 'actId:', actId);
+
+      // Подписываем через эндпоинт клиента с правильным actId
+      await authService.fetchWithAuth(
+        `https://localhost:7053/api/client/acts/${actId}/sign`,
+        { method: 'POST' }
+      );
+
+      alert('✅ Акт подписан!');
+
+      // Обновляем статус
+      await loadActSignatureStatus(actId);
+
+    } catch (e: any) {
+      console.error('Ошибка подписания:', e);
+      alert(e.message || 'Не удалось подписать акт');
+    }
+  };
+
   const [invoiceInfo, setInvoiceInfo] = useState<Record<number, {
     contractSigned: boolean;
     invoiceGenerated: boolean;
     invoiceFilePath?: string;
     invoiceAmount?: number;
-    paymentReceiptUploaded: boolean;        // ✅ Добавлено
-    paymentReceiptPath?: string;            // ✅ Добавлено
-    isPrepaymentConfirmed: boolean;         // ✅ Добавлено
+    paymentReceiptUploaded: boolean;
+    paymentReceiptPath?: string;
+    isPrepaymentConfirmed: boolean;
+
+    // 🔥 НОВОЕ: Гарантийный талон
+    warrantyExists: boolean;
+    warrantyFilePath?: string;
+    warrantyValidUntil?: string;
+
+    // 🔥 Финальный счёт на оплату работ
+    finalInvoiceGenerated?: boolean;
+    finalInvoiceFilePath?: string;
+    finalInvoiceAmount?: number;
+    finalPaymentReceiptUploaded: boolean;
+    finalPaymentReceiptPath?: string;
+    isFinalPaymentConfirmed: boolean;
   } | null>>({});
 
   const [diagnosticActs, setDiagnosticActs] = useState<Record<number, boolean>>({});
@@ -39,6 +248,90 @@ const ClientRequests: React.FC = () => {
   });
 
   const [uploadingReceipt, setUploadingReceipt] = useState<Record<number, boolean>>({});
+
+  const loadWarrantyInfo = async (requestId: number) => {
+    try {
+      console.log('🔍 Загрузка информации о гарантии для заявки:', requestId);
+
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/client/Document/request/${requestId}/warranty-info`
+      );
+
+      console.log('📡 Ответ сервера:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Получены данные о гарантии:', data);
+
+        setInvoiceInfo(prev => {
+          const current = prev[requestId];
+
+          const baseInfo = current ?? {
+            contractSigned: false,
+            invoiceGenerated: false,
+            invoiceFilePath: undefined,
+            invoiceAmount: undefined,
+            paymentReceiptUploaded: false,
+            paymentReceiptPath: undefined,
+            isPrepaymentConfirmed: false,
+            warrantyExists: false,
+            warrantyFilePath: undefined,
+            warrantyValidUntil: undefined,
+            finalInvoiceGenerated: false,
+            finalInvoiceFilePath: undefined,
+            finalInvoiceAmount: undefined,
+            finalPaymentReceiptUploaded: false,
+            finalPaymentReceiptPath: undefined,
+            isFinalPaymentConfirmed: false
+          };
+
+          const newInfo = {
+            ...baseInfo,
+            warrantyExists: data.warrantyExists,
+            warrantyFilePath: data.warrantyFilePath,
+            warrantyValidUntil: data.warrantyValidUntil
+          };
+
+          console.log('💾 Обновлённое состояние:', newInfo);
+
+          return {
+            ...prev,
+            [requestId]: newInfo
+          };
+        });
+      } else {
+        const errorText = await response.text().catch(() => 'N/A');
+        console.error('❌ Ошибка загрузки гарантии:', response.status, errorText);
+      }
+    } catch (error) {
+      console.error('💥 Исключение при загрузке гарантии:', error);
+    }
+  };
+
+  const handleDownloadWarranty = async (requestId: number, warrantyPath: string) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/client/Document/warranty/download?path=${encodeURIComponent(warrantyPath)}`
+      );
+
+      if (!response.ok) throw new Error('Не удалось скачать гарантийный талон');
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+
+      setTimeout(() => {
+        window.URL.revokeObjectURL(blobUrl);
+      }, 60000);
+    } catch (error: any) {
+      console.error('Ошибка скачивания гарантийного талона:', error);
+      alert(error.message || 'Не удалось скачать гарантийный талон');
+    }
+  };
 
   // 🔥 Загрузка чека об оплате
   const handleUploadReceipt = async (requestId: number, file: File) => {
@@ -68,13 +361,11 @@ const ClientRequests: React.FC = () => {
       formData.append('receipt', file);
 
       // 🔥 ИСПРАВЛЕНО: Не устанавливаем Content-Type вручную!
-      // Браузер сам установит multipart/form-data с правильным boundary
       const response = await authService.fetchWithAuth(
         `https://localhost:7053/api/client/Document/invoice/${invoiceId}/upload-receipt`,
         {
           method: 'POST',
           body: formData
-          // ❌ НЕ добавляйте headers: { 'Content-Type': ... } здесь!
         }
       );
 
@@ -155,13 +446,66 @@ const ClientRequests: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setInvoiceInfo(prev => ({
-          ...prev,
-          [requestId]: data
-        }));
+
+        setInvoiceInfo(prev => {
+          const current = prev[requestId];
+
+          const baseInfo = current ?? {
+            contractSigned: false,
+            invoiceGenerated: false,
+            paymentReceiptUploaded: false,
+            isPrepaymentConfirmed: false
+          };
+
+          return {
+            ...prev,
+            [requestId]: {
+              ...baseInfo,
+              ...data
+            }
+          };
+        });
       }
     } catch (error) {
       console.error(`Ошибка загрузки информации о счёте для заявки ${requestId}:`, error);
+    }
+  };
+
+  // 🔥 НОВАЯ ФУНКЦИЯ: Загрузка актов для заявки
+  // 🔥 НОВАЯ ФУНКЦИЯ: Загрузка актов для заявки
+  const loadTaskActs = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/acts`
+      );
+
+      if (response.ok) {
+        const acts = await response.json();
+
+        console.log('✅ [Акты] Получены:', acts);
+
+        setTaskActs(prev => ({
+          ...prev,
+          [requestId]: acts  // ← Просто сохраняем ответ, actId уже там есть
+        }));
+      }
+    } catch (error) {
+      console.error(`Ошибка загрузки актов для заявки ${requestId}:`, error);
+    }
+  };
+
+  // 🔥 НОВАЯ ФУНКЦИЯ: Загрузка статуса финализации
+  const loadFinalizationStatus = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/finalization-status`
+      );
+      if (response.ok) {
+        const status = await response.json();
+        console.log('Статус финализации:', status);
+      }
+    } catch (error) {
+      console.error(`Ошибка загрузки статуса финализации для заявки ${requestId}:`, error);
     }
   };
 
@@ -181,6 +525,13 @@ const ClientRequests: React.FC = () => {
   useEffect(() => {
     loadRequests();
   }, [loadRequests]);
+  useEffect(() => {
+    if (expandedId && taskActs[expandedId]?.actId) {
+      const actId = taskActs[expandedId].actId;
+      console.log('📝 [useEffect] Загрузка статуса для actId:', actId);
+      loadActSignatureStatus(actId);
+    }
+  }, [taskActs, expandedId]);
 
   const filteredRequests = useMemo(() => {
     return requests.filter(request => {
@@ -249,6 +600,38 @@ const ClientRequests: React.FC = () => {
       });
 
       loadInvoiceInfo(id);
+      loadFinalInvoiceInfo(id);  // 🔥 Загружаем информацию о финальном счёте
+      loadWarrantyInfo(id);
+
+      const request = requests.find(r => r.id === id);
+      if (request?.status === RequestStatus.Completed) {
+        loadTaskActs(id);
+      }
+    }
+  };
+
+  // 🔥 НОВАЯ ФУНКЦИЯ: Загрузка статуса подписания для заявки
+  // 🔥 НОВАЯ ФУНКЦИЯ: Загрузка статуса подписания для заявки
+  // 🔥 НОВАЯ ФУНКЦИЯ: Загрузка статуса подписания для заявки
+  const loadActSignatureStatusForRequest = async (requestId: number) => {
+    try {
+      // 🔥 Получаем actId из taskActs
+      const actId = taskActs[requestId]?.actId;
+
+      console.log('🔍 [loadActSignatureStatusForRequest] requestId:', requestId, 'actId:', actId, 'taskActs:', taskActs[requestId]);
+
+      if (!actId) {
+        console.warn('⚠️ actId не найден для requestId:', requestId);
+        return;
+      }
+
+      console.log('📝 [Загрузка статуса] requestId:', requestId, 'actId:', actId);
+
+      // 🔥 Загружаем статус с правильным actId
+      await loadActSignatureStatus(actId);
+
+    } catch (error) {
+      console.error('Ошибка загрузки статуса подписания:', error);
     }
   };
 
@@ -416,7 +799,8 @@ const ClientRequests: React.FC = () => {
                       {/* 🔥 Кнопка просмотра акта и счёта */}
                       {(request.status === RequestStatus.DiagnosticCompleted ||
                         request.status === RequestStatus.WaitingForClientApproval ||
-                        request.status === RequestStatus.ApprovedByClient) && (
+                        request.status === RequestStatus.ApprovedByClient ||
+                        request.status === RequestStatus.Completed) && (
                           <div className={styles.actionSection}>
                             {(() => {
                               const currentInvoiceInfo = invoiceInfo[request.id];
@@ -435,7 +819,8 @@ const ClientRequests: React.FC = () => {
                                       {submitting ? 'Загрузка...' : '📋 Просмотреть акт диагностики'}
                                     </button>
 
-                                    {currentInvoiceInfo?.invoiceGenerated ? (
+                                    {/* 🔥 Показываем счёт ТОЛЬКО если гарантия ещё не выдана */}
+                                    {currentInvoiceInfo?.invoiceGenerated && !currentInvoiceInfo?.warrantyExists ? (
                                       <button
                                         className={styles.viewInvoiceBtn}
                                         onClick={async (e) => {
@@ -534,6 +919,270 @@ const ClientRequests: React.FC = () => {
                                       <div className={styles.confirmedText}>
                                         Предоплата подтверждена диспетчером. Работы начнутся в ближайшее время.
                                       </div>
+                                    </div>
+                                  )}
+
+                                  {/* 🔥 Секция гарантийного талона */}
+                                  {currentInvoiceInfo?.warrantyExists && currentInvoiceInfo.warrantyFilePath && (
+                                    <div className={styles.warrantySection}>
+                                      <div className={styles.sectionTitle}>📄 Гарантийный талон</div>
+
+                                      <div className={styles.warrantyInfo}>
+                                        <p>
+                                          <strong>Действителен до:</strong>{' '}
+                                          {currentInvoiceInfo.warrantyValidUntil
+                                            ? new Date(currentInvoiceInfo.warrantyValidUntil).toLocaleDateString('ru-RU')
+                                            : '—'}
+                                        </p>
+                                      </div>
+
+                                      <button
+                                        className={styles.downloadWarrantyBtn}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDownloadWarranty(request.id, currentInvoiceInfo.warrantyFilePath!);
+                                        }}
+                                      >
+                                        📥 Скачать гарантийный талон (PDF)
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {/* 🔥 Секция гарантийного талона */}
+                                  {/* {currentInvoiceInfo?.warrantyExists && currentInvoiceInfo.warrantyFilePath && (
+                                    <div className={styles.warrantySection}>
+                                      <div className={styles.sectionTitle}>📄 Гарантийный талон</div>
+
+                                      <div className={styles.warrantyInfo}>
+                                        <p>
+                                          <strong>Действителен до:</strong>{' '}
+                                          {currentInvoiceInfo.warrantyValidUntil
+                                            ? new Date(currentInvoiceInfo.warrantyValidUntil).toLocaleDateString('ru-RU')
+                                            : '—'}
+                                        </p>
+                                      </div>
+
+                                      <button
+                                        className={styles.downloadWarrantyBtn}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDownloadWarranty(request.id, currentInvoiceInfo.warrantyFilePath!);
+                                        }}
+                                      >
+                                        📥 Скачать гарантийный талон (PDF)
+                                      </button>
+                                    </div>
+                                  )} */}
+
+                                  {/* 🔥 СЕКЦИЯ ФИНАЛЬНОГО СЧЁТА НА ОПЛАТУ РАБОТ */}
+                                  {request.status === RequestStatus.Completed && currentInvoiceInfo?.finalInvoiceGenerated && (
+                                    <div className={styles.finalInvoiceSection}>
+                                      <div className={styles.sectionTitle}>💰 Счёт на оплату работ</div>
+                                      <p className={styles.sectionHint}>
+                                        ЗИП оплачен отдельно. Данный счёт — только за выполненные работы.
+                                      </p>
+
+                                      {/* Кнопка просмотра счёта */}
+                                      {currentInvoiceInfo.finalInvoiceFilePath && (
+                                        <button
+                                          className={styles.viewFinalInvoiceBtn}
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            try {
+                                              const response = await authService.fetchWithAuth(
+                                                `https://localhost:7053/api/client/Document/request/${request.id}/final-invoice/download`
+                                              );
+
+                                              if (!response.ok) throw new Error('Не удалось скачать счёт');
+
+                                              const blob = await response.blob();
+                                              const blobUrl = window.URL.createObjectURL(blob);
+                                              window.open(blobUrl, '_blank');
+
+                                              setTimeout(() => {
+                                                window.URL.revokeObjectURL(blobUrl);
+                                              }, 60000);
+                                            } catch (error: any) {
+                                              console.error('Ошибка скачивания счёта:', error);
+                                              alert(error.message || 'Не удалось скачать счёт');
+                                            }
+                                          }}
+                                        >
+                                          🧾 Просмотреть счёт на оплату работ
+                                          {currentInvoiceInfo.finalInvoiceAmount && (
+                                            <span className={styles.invoiceAmount}>
+                                              {' '}{currentInvoiceInfo.finalInvoiceAmount.toLocaleString('ru-RU')} ₽
+                                            </span>
+                                          )}
+                                        </button>
+                                      )}
+
+                                      {/* Загрузка чека */}
+                                      {!currentInvoiceInfo.finalPaymentReceiptUploaded && (
+                                        <div className={styles.receiptUploadSection}>
+                                          <div className={styles.sectionTitle}>📄 Загрузить чек об оплате</div>
+                                          <div className={styles.uploadInfo}>
+                                            После оплаты счёта загрузите чек или квитанцию об оплате
+                                          </div>
+
+                                          <div className={styles.fileInputWrapper}>
+                                            <label className={styles.fileInputLabel}>
+                                              Выберите файл
+                                              <input
+                                                type="file"
+                                                accept=".pdf,.jpg,.jpeg,.png"
+                                                onChange={(e) => {
+                                                  const file = e.target.files?.[0];
+                                                  if (file) {
+                                                    handleUploadFinalInvoiceReceipt(request.id, file);
+                                                  }
+                                                }}
+                                                disabled={uploadingReceipt[request.id]}
+                                                className={styles.fileInput}
+                                              />
+                                            </label>
+                                          </div>
+
+                                          {uploadingReceipt[request.id] && (
+                                            <div className={styles.uploading}>
+                                              <span className={styles.spinner}></span>
+                                              Загрузка...
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {/* Чек загружен, ожидает подтверждения */}
+                                      {currentInvoiceInfo.finalPaymentReceiptUploaded && !currentInvoiceInfo.isFinalPaymentConfirmed && (
+                                        <div className={styles.receiptPendingSection}>
+                                          <div className={styles.sectionTitle}>📄 Чек об оплате работ</div>
+                                          <div className={styles.pendingStatus}>✅ Чек загружен</div>
+                                          <div className={styles.pendingText}>
+                                            Ожидайте подтверждения от диспетчера...
+                                          </div>
+                                          {currentInvoiceInfo.finalPaymentReceiptPath && (
+                                            <a
+                                              href={`https://localhost:7053/${currentInvoiceInfo.finalPaymentReceiptPath}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className={styles.viewReceiptLink}
+                                            >
+                                              👁️ Просмотреть чек
+                                            </a>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {/* Оплата подтверждена */}
+                                      {currentInvoiceInfo.isFinalPaymentConfirmed && (
+                                        <div className={styles.paymentConfirmedSection}>
+                                          <div className={styles.sectionTitle}>✅ Оплата работ подтверждена</div>
+                                          <div className={styles.confirmedText}>
+                                            Оплата подтверждена диспетчером. Заявка полностью завершена.
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+
+                                  {/* 🔥 Кнопка просмотра акта выполненных работ (перед подписанием) */}
+                                  {request.status === RequestStatus.Completed && taskActs[request.id] && (
+                                    <div className={styles.viewActSection}>
+                                      <h4 className={styles.sectionTitle}>📄 Акт выполненных работ</h4>
+
+                                      {taskActs[request.id]?.repairActPath && (
+                                        <a
+                                          href={`https://localhost:7053/${taskActs[request.id]!.repairActPath}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className={styles.viewActLink}
+                                        >
+                                          👁️ Просмотреть акт выполненных работ (PDF)
+                                        </a>
+                                      )}
+
+                                      <p className={styles.hintText}>
+                                        Ознакомьтесь с актом и подпишите его ниже
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* 🔥 Секция подписания акта (для клиента) */}
+                                  {/* 🔥 Секция подписания акта (для клиента) */}
+                                  {request.status === RequestStatus.Completed && taskActs[request.id] && (
+                                    <div className={styles.signatureSection}>
+                                      <h4 className={styles.sectionTitle}>✍️ Подписание акта</h4>
+
+                                      <div className={styles.signatureGrid}>
+                                        {/* Подпись клиента */}
+                                        <div className={styles.signatureCard}>
+                                          <div className={styles.signatureHeader}>
+                                            <span className={styles.signatureIcon}>👤</span>
+                                            <span className={styles.signatureTitle}>Ваша подпись</span>
+                                          </div>
+
+                                          {/* 🔥 ИСПРАВЛЕНО: используем actId из taskActs */}
+                                          {(() => {
+                                            const actId = taskActs[request.id]?.actId;
+                                            const signatureStatus = actId ? actSignatureStatus[actId] : null;
+
+                                            return signatureStatus?.isSignedByClient ? (
+                                              <div className={styles.signedBadge}>
+                                                ✅ Подписано {signatureStatus.clientSignedAt &&
+                                                  new Date(signatureStatus.clientSignedAt!).toLocaleString('ru-RU')}
+                                              </div>
+                                            ) : (
+                                              <button
+                                                className={styles.signBtn}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleSignAct(request.id);
+                                                }}
+                                              >
+                                                ✍️ Подписать акт
+                                              </button>
+                                            );
+                                          })()}
+                                        </div>
+
+                                        {/* Подпись диспетчера */}
+                                        <div className={styles.signatureCard}>
+                                          <div className={styles.signatureHeader}>
+                                            <span className={styles.signatureIcon}>🏢</span>
+                                            <span className={styles.signatureTitle}>Подпись сервисного центра</span>
+                                          </div>
+
+                                          {/* 🔥 ИСПРАВЛЕНО: используем actId из taskActs */}
+                                          {(() => {
+                                            const actId = taskActs[request.id]?.actId;
+                                            const signatureStatus = actId ? actSignatureStatus[actId] : null;
+
+                                            return signatureStatus?.isSignedByDispatcher ? (
+                                              <div className={styles.signedBadge}>
+                                                ✅ Подписано диспетчером {signatureStatus.dispatcherSignedAt &&
+                                                  new Date(signatureStatus.dispatcherSignedAt!).toLocaleString('ru-RU')}
+                                              </div>
+                                            ) : (
+                                              <div className={styles.pendingBadge}>
+                                                ⏳ Ожидает подписи
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      </div>
+
+                                      {/* Общий статус */}
+                                      {(() => {
+                                        const actId = taskActs[request.id]?.actId;
+                                        const signatureStatus = actId ? actSignatureStatus[actId] : null;
+
+                                        return signatureStatus?.isFullySigned && (
+                                          <div className={styles.fullySigned}>
+                                            ✅ Акт полностью подписан обеими сторонами
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                   )}
                                 </>

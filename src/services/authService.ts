@@ -3,7 +3,9 @@ import {
   AuthResponse,
   UserInfo,
   UserRole,
-  RefreshTokenRequest
+  RefreshTokenRequest,
+  RegisterRequest,
+  RegisterResponse,
 } from '../types/auth';
 
 import { SpareOption, WorkItem } from '../types/diagnostic';
@@ -317,6 +319,60 @@ class AuthService {
     if (!response.ok) throw new Error('Ошибка поиска работ');
     return response.json();
   }
+
+
+  async register(request: RegisterRequest): Promise<RegisterResponse> {
+    const response = await fetch('https://localhost:7053/api/Auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Ошибка при регистрации');
+    }
+
+    return data;
+  }
+
+  /**
+   * Проверка уникальности логина
+   */
+  async checkLoginUnique(login: string): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `https://localhost:7053/api/Auth/check-login?login=${encodeURIComponent(login)}`
+      );
+
+      if (!response.ok) return false;
+
+      return await response.json();
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Проверка уникальности телефона
+   */
+  async checkPhoneUnique(phone: string): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `https://localhost:7053/api/Auth/check-phone?phone=${encodeURIComponent(phone)}`
+      );
+
+      if (!response.ok) return false;
+
+      return await response.json();
+    } catch {
+      return false;
+    }
+  }
+
 }
 
 export const authService = new AuthService();

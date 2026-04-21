@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { engineerTaskService } from '../../services/engineerTaskService';
 import { EngineerTask, EngineerStats, TaskStatus, TaskFilter } from './types';
 import styles from './EngineerDashboard.module.scss';
@@ -19,6 +19,8 @@ const EngineerDashboard: React.FC = () => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+
 
   // Загрузка данных
   const loadData = useCallback(async () => {
@@ -71,15 +73,27 @@ const EngineerDashboard: React.FC = () => {
     }
   };
 
-  // Завершение работы
-  const handleCompleteTask = async (taskId: number) => {
-    if (!window.confirm('Завершить работу по этому наряду?')) return;
+  // 🔥 Завершение работы (разное для диагностики и ремонта)
+  const handleCompleteTask = async (taskId: number, isRepair: boolean = false) => {
+    if (isRepair) {
+      if (!window.confirm('Завершить наряд на ремонт? Будут сформированы акты.')) return;
+    } else {
+      if (!window.confirm('Завершить диагностику?')) return;
+    }
 
     setProcessingTaskId(taskId);
     try {
-      await engineerTaskService.completeTask(taskId);
+      if (isRepair) {
+        // 🔥 Для ремонта — завершаем с формированием PDF
+        await engineerTaskService.completeRepairTask(taskId);
+        alert('✅ Работа завершена! Сформированы акты выполненных работ и списания ЗИП.');
+      } else {
+        // 🔥 Для диагностики — переходим на форму акта
+        navigate(`/engineer/task/${taskId}/act`, { replace: true });
+        return;  // Не загружаем данные, т.к. переходим на другую страницу
+      }
+
       await loadData();
-      alert('✅ Работа завершена!');
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка');
     } finally {
@@ -141,6 +155,44 @@ const EngineerDashboard: React.FC = () => {
     });
   };
 
+  // 🔥 Группировка задач по заявке
+  const tasksByRequest = useMemo(() => {
+    return filteredTasks.reduce((groups, task) => {
+      const requestId = task.requestId;
+      if (!groups[requestId]) {
+        groups[requestId] = [];
+      }
+      groups[requestId].push(task);
+      return groups;
+    }, {} as Record<number, EngineerTask[]>);
+  }, [filteredTasks]);
+
+  // 🔥 Начало всех работ по заявке
+  const handleStartAllTasks = async (requestId: number) => {
+    if (!window.confirm('Начать все работы по этой заявке?')) return;
+
+    try {
+      await engineerTaskService.startAllTasksForRequest(requestId);
+      await loadData();
+      alert('✅ Все работы начаты!');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка');
+    }
+  };
+
+  // 🔥 Завершение всех работ по заявке
+  const handleCompleteAllTasks = async (requestId: number) => {
+    if (!window.confirm('Завершить все работы по заявке? Будут сформированы акты.')) return;
+
+    try {
+      await engineerTaskService.completeAllTasksForRequest(requestId);
+      await loadData();
+      alert('✅ Все работы завершены! Акты сформированы.');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка');
+    }
+  };
+
   if (loading) {
     return <div className={styles.loading}>Загрузка данных...</div>;
   }
@@ -198,123 +250,137 @@ const EngineerDashboard: React.FC = () => {
       </div>
 
       {/* Список нарядов */}
+      {/* Список нарядов */}
       <div className={styles.tasksList}>
-        {filteredTasks.length === 0 ? (
+        {Object.keys(tasksByRequest).length === 0 ? (
           <div className={styles.empty}>Нарядов не найдено</div>
         ) : (
-          filteredTasks.map(task => (
-            <div key={task.taskId} className={styles.taskCard}>
-              <div
-                className={styles.taskHeader}
-                onClick={() => setExpandedTaskId(expandedTaskId === task.taskId ? null : task.taskId)}
-              >
-                <div className={styles.taskInfo}>
-                  <span className={styles.taskId}>#{task.taskId}</span>
-                  <span className={styles.taskClient}>{task.clientFio}</span>
-                  <span className={styles.taskDevice}>{task.svtType} {task.model}</span>
-                </div>
-                <div className={styles.taskActions}>
-                  <span className={`${styles.statusBadge} ${getStatusClass(task.status)}`}>
-                    {getStatusLabel(task.status)}
-                  </span>
-                  <span className={styles.expandIcon}>
-                    {expandedTaskId === task.taskId ? '▲' : '▼'}
-                  </span>
-                </div>
-              </div>
+          Object.entries(tasksByRequest).map(([requestId, requestTasks]) => {
+            // 🔥 Разделяем на диагностики и ремонты
+            const diagnostics = requestTasks.filter(t =>
+              t.workName?.toLowerCase().includes('диагност')
+            );
 
-              {expandedTaskId === task.taskId && (
-                <div className={styles.taskDetails}>
-                  <div className={styles.detailsGrid}>
-                    <div className={styles.detailItem}>
-                      <label>Клиент:</label>
-                      <span>{task.clientFio}</span>
-                    </div>
-                    <div className={styles.detailItem}>
-                      <label>Телефон:</label>
-                      <span>{task.clientPhone}</span>
-                    </div>
-                    <div className={styles.detailItem}>
-                      <label>Тип СВТ:</label>
-                      <span>{task.svtType}</span>
-                    </div>
-                    <div className={styles.detailItem}>
-                      <label>Модель:</label>
-                      <span>{task.model}</span>
-                    </div>
-                    <div className={styles.detailItem}>
-                      <label>Серийный номер:</label>
-                      <span>{task.serialNumber}</span>
-                    </div>
-                    <div className={styles.detailItem}>
-                      <label>Работа:</label>
-                      <span>{task.workName}</span>
-                    </div>
-                    <div className={styles.detailItem}>
-                      <label>Назначен:</label>
-                      <span>{formatDate(task.assignedAt)}</span>
-                    </div>
-                    {task.startedAt && (
-                      <div className={styles.detailItem}>
-                        <label>Начат:</label>
-                        <span>{formatDate(task.startedAt)}</span>
-                      </div>
-                    )}
-                    {task.completedAt && (
-                      <div className={styles.detailItem}>
-                        <label>Завершён:</label>
-                        <span>{formatDate(task.completedAt)}</span>
-                      </div>
-                    )}
+            const repairs = requestTasks.filter(t =>
+              !t.workName?.toLowerCase().includes('диагност')
+            );
+
+            // 🔥 Проверяем статусы для ремонтов
+            const allRepairsAssigned = repairs.length > 0 && repairs.every(t => t.status === TaskStatus.Assigned);
+            const allRepairsInProgress = repairs.every(t => t.status === TaskStatus.InProgress);
+            const allRepairsCompleted = repairs.every(t => t.status === TaskStatus.Completed);
+
+            return (
+              <div key={requestId} className={styles.requestGroup}>
+                {/* Заголовок группы */}
+                <div className={styles.requestHeader}>
+                  <h3 className={styles.requestTitle}>
+                    Заявка #{requestId}
+                  </h3>
+                  <div className={styles.requestInfo}>
+                    <span>{requestTasks[0]?.clientFio}</span>
+                    <span>{requestTasks[0]?.svtType} {requestTasks[0]?.model}</span>
                   </div>
-
-                  <div className={styles.detailItem}>
-                    <label>Описание неисправности:</label>
-                    <p className={styles.description}>{task.description}</p>
+                  <div className={styles.tasksCount}>
+                    🔧 {repairs.length} работ{repairs.length !== 1 ? 'и' : ''}
+                    {diagnostics.length > 0 && ` + 📋 ${diagnostics.length} диагностик`}
                   </div>
+                </div>
 
-                  {/* Кнопки действий */}
-                  <div className={styles.actionButtons}>
-                    {task.status === TaskStatus.Assigned && (
-                      <button
-                        className={styles.startBtn}
-                        onClick={() => handleStartTask(task.taskId)}
-                        disabled={processingTaskId === task.taskId}
-                      >
-                        {processingTaskId === task.taskId ? 'Запуск...' : '▶ Начать работу'}
-                      </button>
-                    )}
+                {/* 🔥 Наряды на диагностику (отдельно) */}
+                {diagnostics.length > 0 && (
+                  <div className={styles.diagnosticsSection}>
+                    <h4 className={styles.sectionTitle}>📋 Диагностика:</h4>
+                    {diagnostics.map(task => (
+                      <div key={task.taskId} className={styles.taskCard}>
+                        <div className={styles.taskWorkName}>
+                          🔍 {task.workName}
+                        </div>
+                        <span className={`${styles.statusBadge} ${getStatusClass(task.status)}`}>
+                          {getStatusLabel(task.status)}
+                        </span>
 
-                    {task.status === TaskStatus.InProgress && (
+                        {/* Кнопки для диагностики */}
+                        {task.status === TaskStatus.Assigned && (
+                          <button
+                            className={styles.smallBtn}
+                            onClick={() => handleStartTask(task.taskId)}
+                            disabled={processingTaskId === task.taskId}
+                          >
+                            ▶ Начать
+                          </button>
+                        )}
+
+                        {task.status === TaskStatus.InProgress && (
+                          <button
+                            className={styles.smallBtn}
+                            onClick={() => handleCompleteTask(task.taskId, false)}
+                            disabled={processingTaskId === task.taskId}
+                          >
+                            📋 Завершить
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 🔥 Наряды на ремонт (группой) */}
+                {repairs.length > 0 && (
+                  <>
+                    <div className={styles.repairsSection}>
+                      <h4 className={styles.sectionTitle}>🔧 Ремонтные работы:</h4>
+                      <div className={styles.tasksInRequest}>
+                        {repairs.map(task => (
+                          <div key={task.taskId} className={styles.taskCard}>
+                            <div className={styles.taskWorkName}>
+                              🔧 {task.workName}
+                            </div>
+                            <span className={`${styles.statusBadge} ${getStatusClass(task.status)}`}>
+                              {getStatusLabel(task.status)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Кнопки действий для всех ремонтов */}
+                    <div className={styles.groupActions}>
+                      {allRepairsAssigned && (
                         <button
-                           className={styles.completeBtn}
-                           onClick={() => {
-                              // 🔥 Перенаправляем на форму акта диагностики
-                              navigate(`/engineer/task/${task.taskId}/act`, { replace: true });
-                           }}
-                           disabled={processingTaskId === task.taskId}
+                          className={styles.startAllBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartAllTasks(Number(requestId));
+                          }}
                         >
-                           ✓ Завершить с актом
+                          ▶ Начать все работы
                         </button>
-                     )}
+                      )}
 
-                    {(task.status === TaskStatus.Assigned || task.status === TaskStatus.InProgress) && (
-                      <button
-                        className={styles.cancelBtn}
-                        onClick={() => {
-                          setSelectedTask(task);
-                          setShowCancelModal(true);
-                        }}
-                        disabled={processingTaskId === task.taskId}
-                      >
-                        ✕ Отменить
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))
+                      {allRepairsInProgress && (
+                        <button
+                          className={styles.completeAllBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCompleteAllTasks(Number(requestId));
+                          }}
+                        >
+                          ✅ Завершить все работы
+                        </button>
+                      )}
+
+                      {allRepairsCompleted && (
+                        <div className={styles.completedBadge}>
+                          ✅ Все работы завершены
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 

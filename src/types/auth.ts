@@ -32,3 +32,35 @@ export interface UserInfo {
 export interface RefreshTokenRequest {
   refreshToken: string;
 }
+
+// src/types/auth.ts
+
+export interface RegisterRequest {
+  fio: string;
+  login: string;
+  password: string;
+  phone: string;
+  email?: string;
+}
+
+export interface RegisterResponse {
+  success: boolean;
+  message: string;
+  clientId?: number;
+  login?: string;
+}
+
+export interface LoginRequest {
+  login: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  role: string;
+  userId: number;
+  fio: string;
+}
+

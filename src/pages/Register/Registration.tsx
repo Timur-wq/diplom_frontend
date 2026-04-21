@@ -3,16 +3,17 @@ import '../Login/login.module.scss';
 import { hasSQLInjection } from '../../utils/sqlInjection'; // если используете
 import { InputFieldMessages } from '../../utils/constants';
 import { useNavigate } from 'react-router-dom';
+import { Button } from '../../components/UI';
 
 interface RegistrationFormState {
-  email: string;
+  phone: string;
   userName: string;
   password: string;
   confirmPassword: string;
 }
 
 interface FormErrors {
-  email?: string;
+  phone?: string;
   userName?: string;
   password?: string;
   confirmPassword?: string;
@@ -23,7 +24,7 @@ const Registration: React.FC = () => {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState<RegistrationFormState>({
-    email: '',
+    phone: '',
     userName: '',
     password: '',
     confirmPassword: '',
@@ -32,12 +33,34 @@ const Registration: React.FC = () => {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
 
-  // Валидация email
-  const validateEmail = (email: string): string | undefined => {
-    if (!email) return InputFieldMessages.RequireEmail;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return InputFieldMessages.IncorrectEmail;
-    if (hasSQLInjection(email)) return InputFieldMessages.IncorrectEmail;
+  const formatPhoneValue = (value: string): string => {
+    const digits = value.replace(/\D/g, '');
+    const normalized = digits.startsWith('8') ? '7' + digits.slice(1) : digits;
+    const trimmed = normalized.slice(0, 11);
+
+    if (!trimmed) return '';
+    if (!trimmed.startsWith('7')) return trimmed;
+
+    const part1 = trimmed.slice(1, 4);
+    const part2 = trimmed.slice(4, 7);
+    const part3 = trimmed.slice(7, 9);
+    const part4 = trimmed.slice(9, 11);
+
+    let formatted = '+7';
+    if (part1) formatted += ` (${part1}`;
+    if (part1.length === 3) formatted += ')';
+    if (part2) formatted += ` ${part2}`;
+    if (part3) formatted += `-${part3}`;
+    if (part4) formatted += `-${part4}`;
+
+    return formatted;
+  };
+
+  const validatePhone = (phone: string): string | undefined => {
+    if (!phone) return 'Телефон обязателен';
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length !== 11 || !digits.startsWith('7')) return 'Введите корректный номер +7 (900) 000-00-00';
+    if (hasSQLInjection(phone)) return 'Некорректный телефон';
     return undefined;
   };
 
@@ -75,14 +98,14 @@ const Registration: React.FC = () => {
   const isFormValid = useMemo(() => {
     // Все поля должны быть заполнены
     const allFilled = 
-      formData.email.trim() !== '' &&
+      formData.phone.trim() !== '' &&
       formData.userName.trim() !== '' &&
       formData.password.trim() !== '' &&
       formData.confirmPassword.trim() !== '';
     
     // Все ошибки должны отсутствовать
     const noErrors = 
-      !errors.email &&
+      !errors.phone &&
       !errors.userName &&
       !errors.password &&
       !errors.confirmPassword;
@@ -92,14 +115,16 @@ const Registration: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
 
     // Валидация поля
     let error: string | undefined;
+    const fieldValue = name === 'phone' ? formatPhoneValue(value) : value;
+    setFormData(prev => ({ ...prev, [name]: fieldValue }));
+
     switch (name) {
-      case 'email':
-        error = validateEmail(value);
-        setErrors(prev => ({ ...prev, email: error }));
+      case 'phone':
+        error = validatePhone(fieldValue);
+        setErrors(prev => ({ ...prev, phone: error }));
         break;
       case 'userName':
         error = validateUserName(value);
@@ -125,13 +150,13 @@ const Registration: React.FC = () => {
     e.preventDefault();
 
     // Финальная проверка всех полей (на случай, если пользователь как-то обошёл интерфейс)
-    const emailError = validateEmail(formData.email);
+    const phoneError = validatePhone(formData.phone);
     const userNameError = validateUserName(formData.userName);
     const passwordError = validatePassword(formData.password);
     const confirmError = validateConfirmPassword(formData.confirmPassword, formData.password);
 
     const newErrors = {
-      email: emailError,
+      phone: phoneError,
       userName: userNameError,
       password: passwordError,
       confirmPassword: confirmError,
@@ -140,7 +165,7 @@ const Registration: React.FC = () => {
     setErrors(newErrors);
 
     // Если есть ошибки, не отправляем
-    if (emailError || userNameError || passwordError || confirmError) {
+    if (phoneError || userNameError || passwordError || confirmError) {
       return;
     }
 
@@ -151,7 +176,7 @@ const Registration: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: formData.email,
+          phone: formData.phone,
           username: formData.userName,
           password: formData.password,
         }),
@@ -178,20 +203,21 @@ const Registration: React.FC = () => {
       <form className="form" onSubmit={handleSubmit}>
         <h2 className="title">Регистрация</h2>
 
-        {/* Email */}
+        {/* Телефон */}
         <div className="field">
-          <label htmlFor="email" className="label">Email</label>
+          <label htmlFor="phone" className="label">Телефон</label>
           <input
-            type="email"
-            id="email"
-            name="email"
-            className={`input ${errors.email ? 'inputError' : ''}`}
-            value={formData.email}
+            type="tel"
+            id="phone"
+            name="phone"
+            className={`input ${errors.phone ? 'inputError' : ''}`}
+            value={formData.phone}
             onChange={handleChange}
             disabled={isLoading}
             required
+            placeholder="+7 (900) 000-00-00"
           />
-          {errors.email && <div className="errorMessage">{errors.email}</div>}
+          {errors.phone && <div className="errorMessage">{errors.phone}</div>}
         </div>
 
         {/* Имя пользователя */}
@@ -242,13 +268,14 @@ const Registration: React.FC = () => {
           {errors.confirmPassword && <div className="errorMessage">{errors.confirmPassword}</div>}
         </div>
 
-        <button 
-          type="submit" 
-          className="button" 
+        <Button
+          type="submit"
+          className="button"
           disabled={!isFormValid || isLoading}
+          isLoading={isLoading}
         >
           {isLoading ? 'Отправка...' : 'Зарегистрироваться'}
-        </button>
+        </Button>
       </form>
     </div>
   );

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import { hasSQLInjection } from '../../utils/sqlInjection';
+import { Button } from '../../components/UI';
 import styles from './login.module.scss';
 
 interface LoginFormState {
@@ -217,21 +218,14 @@ const Login: React.FC = () => {
         </div>
 
         {/* Кнопка входа */}
-        <button
+        <Button
           type="submit"
           className={styles.button}
           disabled={!isFormValid || isLoading}
-          aria-busy={isLoading}
+          isLoading={isLoading}
         >
-          {isLoading ? (
-            <span className={styles.loading}>
-              <span className={styles.spinner} aria-hidden="true"></span>
-              Вход...
-            </span>
-          ) : (
-            'Войти'
-          )}
-        </button>
+          {isLoading ? 'Вход...' : 'Войти'}
+        </Button>
       </form>
     </div>
   );

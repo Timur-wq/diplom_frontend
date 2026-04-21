@@ -6,6 +6,49 @@ import styles from './RequestsAdmin.module.scss';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 // Типы
+// Тип для статуса финализации
+interface FinalizationStatus {
+  actExists: boolean;
+  actSigned: boolean;
+  actSignedAt?: string;
+  paymentReceived: boolean;
+  warrantyExists: boolean;
+  warrantyPath?: string;
+  warrantyValidUntil?: string;
+  sentToClient: boolean;
+
+  // 🔥 НОВЫЕ ПОЛЯ для подписания акта:
+  actSignedByClient?: boolean;
+  clientSignedAt?: string;
+  actSignedByDispatcher?: boolean;
+  dispatcherSignedAt?: string;
+  isFullySigned?: boolean;
+}
+
+
+interface TaskActs {
+  repairActPath?: string;
+  spareWriteOffPath?: string;
+  createdAt?: string;
+}
+// 🔥 Типы для назначения нарядов на ремонт
+interface RepairWorkItem {
+  taskId: number;
+  workCode: number;
+  workName: string;
+  estimatedCost: number;
+}
+
+interface AssignRepairWorkOrdersResponse {
+  success: boolean;
+  message: string;
+  taskIds: number[];
+  assignedEngineerId: number;
+  engineerName: string;
+  worksCount: number;
+  works: RepairWorkItem[];
+  assignedAt: string;
+}
 interface RequestDto {
   id: number;
   clientId: number;
@@ -61,6 +104,11 @@ const RequestsAdmin: React.FC = () => {
   const [generatingContract, setGeneratingContract] = useState<Record<number, boolean>>({});
   const [signedContracts, setSignedContracts] = useState<Record<number, boolean | undefined>>({});
   const [contractIds, setContractIds] = useState<Record<number, number>>({});
+  const [creatingWorkOrder, setCreatingWorkOrder] = useState<Record<number, boolean>>({});
+  const [taskActs, setTaskActs] = useState<Record<number, TaskActs>>({});
+  // Состояние
+  const [finalizationStatus, setFinalizationStatus] = useState<Record<number, FinalizationStatus>>({});
+
 
   const [spareStatus, setSpareStatus] = useState<{
     hasPendingOrders: boolean;
@@ -72,12 +120,248 @@ const RequestsAdmin: React.FC = () => {
     }>;
   } | null>(null);
 
+
+
+  // Перегенерация акта с подписями
+  const handleRegenerateRepairAct = async (requestId: number) => {
+    if (!window.confirm('Перегенерировать акт выполненных работ с электронными подписями?')) return;
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/acts/regenerate-with-signatures`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) throw new Error('Не удалось перегенерировать акт');
+
+      const result = await response.json();
+      alert('✅ Акт перегенерирован с подписями!');
+
+      // Обновляем акты
+      loadTaskActs(requestId);
+
+    } catch (e: any) {
+      alert(e.message || 'Ошибка при перегенерации акта');
+    }
+  };
+
+  // Отметить подписание клиентом
+  const handleMarkClientSigned = async (requestId: number, method: string = 'office_handwritten') => {
+    if (!window.confirm('Подтвердить подписание акта клиентом?')) return;
+
+    try {
+      await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/acts/mark-client-signed`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ signatureMethod: method })
+        }
+      );
+      alert('✅ Подписание клиента отмечено');
+      refreshData();
+    } catch (e: any) {
+      alert(e.message || 'Ошибка');
+    }
+  };
+
+
+
+  // Подписать акт диспетчером
+  const handleDispatcherSignAct = async (requestId: number) => {
+    if (!window.confirm('Подписать акт от имени сервисного центра?')) return;
+
+    try {
+      await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/acts/dispatcher-sign`,
+        { method: 'POST' }
+      );
+      alert('✅ Акт подписан диспетчером');
+      refreshData();
+    } catch (e: any) {
+      alert(e.message || 'Ошибка');
+    }
+  };
+
+  const loadFinalizationStatus = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/finalization-status`
+      );
+      if (response.ok) {
+        const status: FinalizationStatus = await response.json();
+        setFinalizationStatus(prev => ({ ...prev, [requestId]: status }));
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки статуса финализации:', error);
+    }
+  };
+
+  // Подписание акта (клиент в офисе)
+  const handleSignActOffice = async (requestId: number) => {
+    if (!window.confirm('Подтвердить, что клиент подписал акт в офисе?')) return;
+    try {
+      await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/acts/sign-office`,
+        { method: 'POST' }
+      );
+      alert('✅ Акт подписан!');
+      loadFinalizationStatus(requestId);
+      refreshData();
+    } catch (e: any) {
+      alert(e.message || 'Ошибка');
+    }
+  };
+
+  // Отметка оплаты
+  const handleMarkPaymentReceived = async (requestId: number) => {
+    if (!window.confirm('Подтвердить получение оплаты?')) return;
+    try {
+      await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/payment/received`,
+        { method: 'POST' }
+      );
+      alert('✅ Оплата подтверждена!');
+      loadFinalizationStatus(requestId);
+      refreshData();
+    } catch (e: any) {
+      alert(e.message || 'Ошибка');
+    }
+  };
+
+  // Генерация гарантийного талона
+  const handleGenerateWarranty = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/warranty/generate`,
+        { method: 'POST' }
+      );
+      if (!response.ok) throw new Error('Не удалось сформировать талон');
+
+      const result = await response.json();
+      alert(`✅ Гарантийный талон сформирован!\nДействителен до: ${new Date(result.validUntil).toLocaleDateString('ru-RU')}`);
+
+      // Открываем талон в новой вкладке
+      if (result.warrantyPath) {
+        window.open(`https://localhost:7053/${result.warrantyPath}`, '_blank');
+      }
+
+      loadFinalizationStatus(requestId);
+      refreshData();
+    } catch (e: any) {
+      alert(e.message || 'Ошибка');
+    }
+  };
+
   // После загрузки заявки проверяем статус ЗИП
   // useEffect(() => {
   //   if (request?.id && request.status === RequestStatus.ApprovedByClient) {
   //     checkSpareStatus(request.id);
   //   }
   // }, [request?.id, request?.status]);
+  // 🔥 Обработчик создания наряда на ремонт
+  // 🔥 Обработчик создания наряда на ремонт (обновлённый)
+  // src/pages/Admin/Request/RequestAdmin.tsx
+
+  // Функция загрузки
+  // Функция загрузки актов
+  const loadTaskActs = async (requestId: number) => {
+    console.log('🔍 [Акты] Загрузка для requestId:', requestId);
+
+    try {
+      // 🔥 Новый URL в AdminRequestController
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/acts`
+      );
+
+      console.log('📡 [Акты] Ответ сервера:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText
+      });
+
+      if (response.ok) {
+        const acts: TaskActs = await response.json();
+        console.log('✅ [Акты] Получены данные:', acts);
+
+        setTaskActs(prev => {
+          const newActs = { ...prev, [requestId]: acts };
+          console.log('💾 [Акты] Обновлён state:', newActs[requestId]);
+          return newActs;
+        });
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ [Акты] Ошибка:', response.status, errorData);
+      }
+    } catch (error) {
+      console.error('💥 [Акты] Исключение:', error);
+    }
+  };
+
+
+  const handleCreateWorkOrder = async (requestId: number) => {
+    if (!window.confirm('Назначить наряд на ремонт для заявки #' + requestId + '?'))
+      return;
+
+    setCreatingWorkOrder(prev => ({ ...prev, [requestId]: true }));
+
+    try {
+      // 🔥 Вызываем НОВЫЙ эндпоинт для ремонта
+      const response = await authService.fetchWithAuth(
+        'https://localhost:7053/api/Task/assign-repair',  // ← Новый URL!
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requestId: requestId,      // ← Только заявка
+            maxActiveOrders: 2
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Не удалось назначить наряд');
+      }
+
+      const result: AssignRepairWorkOrdersResponse = await response.json();
+
+      console.log('✅ Наряды на ремонт назначены:', result);
+
+      const engineerFio = result.engineerName || `Сотрудник #${result.assignedEngineerId}`;
+
+      // Обновляем заявку
+      setAllRequests(prev => prev.map(req =>
+        req.id === requestId
+          ? {
+            ...req,
+            assignedEngineerFio: engineerFio,
+            assignedEngineerTabNumber: result.assignedEngineerId,
+            assignedAt: result.assignedAt || new Date().toISOString(),
+            status: RequestStatus.InProgress
+          }
+          : req
+      ));
+
+      // Показываем модальное окно со списком работ
+      setAssignModal({
+        isOpen: true,
+        requestId: requestId,
+        engineer: {
+          fio: engineerFio,
+          tabNumber: result.assignedEngineerId?.toString() || '',
+          specialization: ''
+        },
+        works: result.works  // ← Список работ для отображения
+      });
+
+    } catch (error: any) {
+      console.error('❌ Ошибка назначения нарядов на ремонт:', error);
+      alert(error.message || 'Не удалось назначить наряд');
+    } finally {
+      setCreatingWorkOrder(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
 
   const checkSpareStatus = async (requestId: number) => {
     try {
@@ -127,6 +411,18 @@ const RequestsAdmin: React.FC = () => {
     isPaid: boolean;
   } | null>>({});
 
+
+  // 🔥 НОВОЕ: Состояние для финального счёта на работы
+  const [finalInvoiceInfo, setFinalInvoiceInfo] = useState<Record<number, {
+    invoiceId?: number;
+    generated: boolean;
+    amount?: number;
+    filePath?: string;
+    receiptUploaded: boolean;
+    receiptPath?: string;
+    isPaid: boolean;
+  } | null>>({});
+
   const [generatingInvoice, setGeneratingInvoice] = useState<Record<number, boolean>>({});
   const [confirmingPayment, setConfirmingPayment] = useState<Record<number, boolean>>({});
 
@@ -147,10 +443,12 @@ const RequestsAdmin: React.FC = () => {
       tabNumber?: string;
       specialization?: string;
     } | null;
+    works?: RepairWorkItem[];  // ← Добавлено!
   }>({
     isOpen: false,
     requestId: null,
-    engineer: null
+    engineer: null,
+    works: []  // ← Инициализация пустым массивом
   });
 
   const [assigningId, setAssigningId] = useState<number | null>(null);
@@ -376,6 +674,7 @@ const RequestsAdmin: React.FC = () => {
       if (!response.ok) throw new Error('Не удалось загрузить заявки');
 
       const data: any[] = await response.json();
+      console.log('📦 [loadRequests] Получено заявок:', data.length);
 
       const statusMap: Record<number, RequestStatus> = {
         0: RequestStatus.New,
@@ -399,9 +698,17 @@ const RequestsAdmin: React.FC = () => {
         assignedAt: item.assignedAt || item.taskAssignedAt
       }));
 
+      // 🔥 Логирование завершённых заявок
+      const completed = normalizedData.filter(r => r.status === RequestStatus.Completed);
+      console.log('✅ [loadRequests] Завершённых заявок:', completed.map(r => ({
+        id: r.id,
+        assignedEngineerTabNumber: r.assignedEngineerTabNumber
+      })));
+
       setAllRequests(normalizedData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки');
+      console.error('💥 [loadRequests] Ошибка:', err);
     } finally {
       setLoading(false);
     }
@@ -482,20 +789,57 @@ const RequestsAdmin: React.FC = () => {
   const toggleExpand = (id: number) => {
     const isExpanding = expandedId !== id;
     setExpandedId(isExpanding ? id : null);
-    setSpareStatus(null);  // ✅ Сбрасываем статус при сворачивании
+    setSpareStatus(null);
 
     if (isExpanding) {
       checkDiagnosticAct(id).then(hasAct => {
         setDiagnosticActs(prev => ({ ...prev, [id]: hasAct }));
       });
       checkContractSigned(id);
-      loadInvoiceInfo(id);
+      loadInvoiceInfo(id);  // Предоплата ЗИП
+      loadFinalInvoiceInfo(id);  // 🔥 НОВОЕ: Финальный счёт на работы
 
-      // ✅ Проверяем статус ЗИП только если заявка в статусе ApprovedByClient
       const request = allRequests.find(r => r.id === id);
+
       if (request?.status === RequestStatus.ApprovedByClient) {
         checkSpareStatus(id);
       }
+
+      if (request?.status === RequestStatus.Completed) {
+        console.log('✅ [toggleExpand] Загружаем акты для requestId:', request.id);
+        loadTaskActs(request.id);
+        loadFinalizationStatus(request.id);
+        loadActSignatureStatus(request.id);
+      }
+    }
+  };
+
+  // Загрузка статуса подписания акта
+  const loadActSignatureStatus = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/acts/signature-status`
+      );
+
+      if (response.ok) {
+        const status = await response.json();
+        console.log('✅ [SignatureStatus] Получен статус:', status);
+
+        // Обновляем finalizationStatus с данными о подписании
+        setFinalizationStatus(prev => ({
+          ...prev,
+          [requestId]: {
+            ...prev[requestId],
+            actSignedByClient: status.isSignedByClient,
+            clientSignedAt: status.clientSignedAt,
+            actSignedByDispatcher: status.isSignedByDispatcher,
+            dispatcherSignedAt: status.dispatcherSignedAt,
+            isFullySigned: status.isFullySigned
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('❌ Ошибка загрузки статуса подписания:', error);
     }
   };
 
@@ -570,6 +914,15 @@ const RequestsAdmin: React.FC = () => {
       setGeneratingInvoice(prev => ({ ...prev, [requestId]: false }));
     }
   };
+
+  // 🔥 Загружаем информацию о финальном счёте при изменении заявок
+  useEffect(() => {
+    allRequests.forEach(request => {
+      if (request.status === RequestStatus.Completed && expandedId === request.id) {
+        loadFinalInvoiceInfo(request.id);
+      }
+    });
+  }, [allRequests, expandedId]);
 
   const handleConfirmPrepayment = async (requestId: number) => {
     const invoice = invoiceInfo[requestId];
@@ -740,6 +1093,170 @@ const RequestsAdmin: React.FC = () => {
       return false;
     } catch {
       return false;
+    }
+  };
+
+  const handleSendActsToClient = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/acts/signature-status`
+      );
+
+      if (!response.ok) throw new Error('Не удалось получить статус');
+
+      const status = await response.json();
+
+      // Просто показываем текущий статус
+      alert(`Статус акта:
+      • Подписан клиентом: ${status.isSignedByClient ? '✅' : '❌'}
+      • Подписан диспетчером: ${status.isSignedByDispatcher ? '✅' : '❌'}
+      • Полностью подписан: ${status.isFullySigned ? '✅' : '❌'}
+      
+      Файл: ${status.filePath || 'Не сгенерирован'}`);
+
+    } catch (e: any) {
+      alert(e.message || 'Ошибка');
+    }
+  };
+
+
+
+  const handleSendWarrantyToClient = async (requestId: number) => {
+    if (!window.confirm('Отправить гарантийный талон клиенту?')) return;
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/warranty/send-to-client`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) throw new Error('Не удалось отправить');
+
+      alert('✅ Гарантийный талон отправлен клиенту!\nТеперь он доступен в личном кабинете.');
+      loadFinalizationStatus(requestId);
+      refreshData();
+    } catch (e: any) {
+      alert(e.message || 'Ошибка');
+    }
+  };
+
+  // 🔥 Генерация счёта на оплату работ (финальный платёж)
+  // 🔥 Генерация счёта на оплату работ (финальный платёж)
+  const handleGenerateFinalInvoice = async (requestId: number) => {
+    if (!window.confirm('Сформировать счёт на оплату работ для заявки #' + requestId + '?')) return;
+
+    setGeneratingInvoice(prev => ({ ...prev, [requestId]: true }));
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/invoice/generate`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Не удалось сформировать счёт');
+      }
+
+      const result = await response.json();
+
+      // Открываем счёт в новой вкладке
+      if (result.filePath) {
+        window.open(`https://localhost:7053/${result.filePath}`, '_blank');
+      }
+
+      alert('✅ Счёт на оплату работ сформирован!\nСумма: ' + result.amount?.toLocaleString('ru-RU') + ' ₽');
+
+      // 🔥 ИСПРАВЛЕНО: Обновляем finalInvoiceInfo, а не invoiceInfo
+      setFinalInvoiceInfo(prev => ({
+        ...prev,
+        [requestId]: {
+          invoiceId: result.invoiceId,
+          generated: true,
+          amount: result.amount,
+          filePath: result.filePath,
+          receiptUploaded: false,
+          receiptPath: undefined,
+          isPaid: false
+        }
+      }));
+
+      loadFinalizationStatus(requestId);
+
+    } catch (error: any) {
+      console.error('❌ Ошибка генерации счёта:', error);
+      alert(error.message || 'Не удалось сформировать счёт');
+    } finally {
+      setGeneratingInvoice(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  // 🔥 Подтверждение оплаты диспетчером
+  // 🔥 Подтверждение оплаты диспетчером
+  const handleConfirmFinalPayment = async (requestId: number) => {
+    // 🔥 ИСПРАВЛЕНО: Берём данные из finalInvoiceInfo
+    const invoice = finalInvoiceInfo[requestId];
+    if (!invoice?.invoiceId) {
+      alert('Не удалось найти счёт');
+      return;
+    }
+
+    if (!window.confirm('Подтвердить получение оплаты по счёту #' + invoice.invoiceId + '?')) return;
+
+    setConfirmingPayment(prev => ({ ...prev, [requestId]: true }));
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/invoice/${invoice.invoiceId}/confirm-paid`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) {
+        throw new Error('Не удалось подтвердить оплату');
+      }
+
+      // 🔥 ИСПРАВЛЕНО: Обновляем finalInvoiceInfo
+      setFinalInvoiceInfo(prev => ({
+        ...prev,
+        [requestId]: prev[requestId] ? { ...prev[requestId]!, isPaid: true } : null
+      }));
+
+      alert('✅ Оплата подтверждена! Заявка завершена.');
+      loadFinalizationStatus(requestId);
+      refreshData();
+
+    } catch (error: any) {
+      console.error('❌ Ошибка подтверждения оплаты:', error);
+      alert(error.message || 'Не удалось подтвердить оплату');
+    } finally {
+      setConfirmingPayment(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  // 🔥 Загрузка информации о финальном счёте
+  const loadFinalInvoiceInfo = async (requestId: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/AdminRequest/${requestId}/invoice`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setFinalInvoiceInfo(prev => ({
+          ...prev,
+          [requestId]: {
+            invoiceId: data.invoiceId,
+            generated: true,
+            amount: data.amount,
+            filePath: data.filePath,
+            receiptUploaded: data.receiptUploaded ?? false,  // 🔥 Добавлено ?? false
+            receiptPath: data.receiptPath,
+            isPaid: data.isPaid ?? false  // 🔥 Добавлено ?? false
+          }
+        }));
+      }
+    } catch (error) {
+      console.error(`Ошибка загрузки информации о финальном счёте для заявки ${requestId}:`, error);
     }
   };
 
@@ -1056,7 +1573,7 @@ const RequestsAdmin: React.FC = () => {
                     </div>
                   )}
 
-                  {signedContracts[request.id] === true && (
+                  {signedContracts[request.id] === true && !invoiceInfo[request.id]?.isPaid && (
                     <div className={styles.invoiceSection}>
                       <div className={styles.sectionTitle}>🧾 Счёт на предоплату</div>
 
@@ -1171,8 +1688,12 @@ const RequestsAdmin: React.FC = () => {
                               ✅ Предоплата подтверждена — работы могут начинаться
                             </div>
                           )}
+                          {/* 🔥 СЕКЦИЯ С АКТАМИ (только для завершённых заявок) */}
+
                         </div>
                       )}
+
+
 
                       {request?.status === RequestStatus.ApprovedByClient && (
                         <div className={styles.actionSection}>
@@ -1205,10 +1726,335 @@ const RequestsAdmin: React.FC = () => {
                             // 🔥 НЕТ неподтверждённых заявок → все ЗИП на складе
                             <button
                               className={styles.assignWorkOrderBtn}
+                              onClick={() => handleCreateWorkOrder(request.id)}  // ← Добавлено!
+                              disabled={creatingWorkOrder[request.id]}           // ← Добавлено!
                             >
-                              🔧 Назначить наряд на ремонт
+                              {creatingWorkOrder[request.id] ? (                 // ← Добавлено!
+                                <span className={styles.loading}>
+                                  <span className={styles.spinner}></span>
+                                  Назначение...
+                                </span>
+                              ) : (
+                                '🔧 Назначить наряд на ремонт'
+                              )}
                             </button>
                           )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ✅ СЕКЦИЯ С АКТАМИ */}
+                  {request.status === RequestStatus.Completed && taskActs[request.id] && (
+                    <div className={styles.documentsSection}>
+                      <h4 className={styles.sectionTitle}>📄 Акты по завершённым работам:</h4>
+
+                      <div className={styles.documentsList}>
+                        {/* Акт выполненных работ */}
+                        {taskActs[request.id]?.repairActPath && (
+                          <div className={styles.documentItem}>
+                            <a
+                              href={`https://localhost:7053/${taskActs[request.id]!.repairActPath}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.documentLink}
+                            >
+                              📋 Акт выполненных работ (PDF)
+                            </a>
+
+                            {/* 🔥 Кнопка перегенерации с подписями - показывается только когда обе стороны подписали */}
+                            {/* 🔥 Кнопка перегенерации с подписями */}
+                            {(finalizationStatus[request.id]?.isFullySigned ||
+                              (finalizationStatus[request.id]?.actSignedByClient &&
+                                finalizationStatus[request.id]?.actSignedByDispatcher)) && (
+                                <button
+                                  className={styles.regenerateActBtn}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRegenerateRepairAct(request.id);
+                                  }}
+                                  title="Перегенерировать акт с электронными подписями"
+                                >
+                                  🔄 С подписями
+                                </button>
+                              )}
+                          </div>
+                        )}
+
+                        {/* Акт списания ЗИП */}
+                        {taskActs[request.id]?.spareWriteOffPath && (
+                          <div className={styles.documentItem}>
+                            <a
+                              href={`https://localhost:7053/${taskActs[request.id]!.spareWriteOffPath}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.documentLink}
+                            >
+                              📦 Акт списания ЗИП (PDF)
+                            </a>
+                          </div>
+                        )}
+
+                        {/* Если актов нет */}
+                        {!taskActs[request.id]?.repairActPath && !taskActs[request.id]?.spareWriteOffPath && (
+                          <p className={styles.noDocuments}>Акты ещё не сформированы</p>
+                        )}
+                      </div>
+
+                      {/* Дата формирования */}
+                      {taskActs[request.id]?.createdAt && (
+                        <p className={styles.documentDate}>
+                          Сформировано: {new Date(taskActs[request.id]!.createdAt!).toLocaleString('ru-RU')}
+                        </p>
+                      )}
+
+                      {/* Подсказка */}
+                      {finalizationStatus[request.id]?.isFullySigned && !taskActs[request.id]?.repairActPath?.includes('signed') && (
+                        <p className={styles.hintText}>
+                          💡 Нажмите "🔄 С подписями", чтобы перегенерировать акт с электронными подписями
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 🔥 СЕКЦИЯ ФИНАЛИЗАЦИИ */}
+                  {request.status === RequestStatus.Completed && (
+                    <div className={styles.finalizationSection}>
+                      <h4 className={styles.sectionTitle}>📝 Финализация заявки</h4>
+                      {/* 🔥 Кнопка обновления статуса */}
+                      <button
+                        className={styles.refreshStatusBtn}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          loadActSignatureStatus(request.id);
+                        }}
+                      >
+                        🔄 Обновить статус подписания
+                      </button>
+
+                      {/* 🔥 ВСТАВЬТЕ СЮДА: Секция статуса подписания акта */}
+                      {/* Кнопка отправки акта клиенту */}
+                      {finalizationStatus[request.id]?.actExists && (
+                        <div className={styles.signatureSection}>
+                          <h4 className={styles.sectionTitle}>📝 Статус подписания акта</h4>
+
+                          <div className={styles.signatureStatus}>
+                            <div className={styles.statusItem}>
+                              <span className={styles.statusIcon}>
+                                {finalizationStatus[request.id]?.actSignedByClient ? '✅' : '⏳'}
+                              </span>
+                              <span>
+                                {finalizationStatus[request.id]?.actSignedByClient
+                                  ? `Подписан клиентом ${new Date(finalizationStatus[request.id]!.clientSignedAt!).toLocaleString('ru-RU')}`
+                                  : 'Ожидает подписи клиента'}
+                              </span>
+                            </div>
+
+                            <div className={styles.statusItem}>
+                              <span className={styles.statusIcon}>
+                                {finalizationStatus[request.id]?.actSignedByDispatcher ? '✅' : '⏳'}
+                              </span>
+                              <span>
+                                {finalizationStatus[request.id]?.actSignedByDispatcher
+                                  ? `Подписан диспетчером ${new Date(finalizationStatus[request.id]!.dispatcherSignedAt!).toLocaleString('ru-RU')}`
+                                  : 'Ожидает подписи диспетчера'}
+                              </span>
+                            </div>
+
+                            {finalizationStatus[request.id]?.isFullySigned && (
+                              <div className={styles.fullySignedBadge}>
+                                ✅ Акт полностью подписан обеими сторонами
+                              </div>
+                            )}
+
+                            {/* Кнопка подписания диспетчером (если клиент уже подписал) */}
+                            {finalizationStatus[request.id]?.actSignedByClient &&
+                              !finalizationStatus[request.id]?.actSignedByDispatcher && (
+                                <button
+                                  className={styles.signBtn}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDispatcherSignAct(request.id);
+                                  }}
+                                >
+                                  ✍️ Подписать акт диспетчером
+                                </button>
+                              )}
+                          </div>
+                        </div>
+                      )}
+
+
+                      <div className={styles.checklist}>
+                        {/* Шаг 1: Акт подписан */}
+                        <label className={styles.checkItem}>
+                          <input
+                            type="checkbox"
+                            checked={finalizationStatus[request.id]?.actSigned || false}
+                            onChange={() => !finalizationStatus[request.id]?.actSigned && handleSignActOffice(request.id)}
+                            disabled={finalizationStatus[request.id]?.actSigned}
+                          />
+                          <span>✅ Акт подписан клиентом</span>
+                          {finalizationStatus[request.id]?.actSignedAt && (
+                            <small>{new Date(finalizationStatus[request.id]!.actSignedAt!).toLocaleString('ru-RU')}</small>
+                          )}
+                        </label>
+
+                        {/* Шаг 2: Оплата получена */}
+                        <label className={styles.checkItem}>
+                          <input
+                            type="checkbox"
+                            checked={finalizationStatus[request.id]?.paymentReceived || false}
+                            onChange={() => finalizationStatus[request.id]?.actSigned && !finalizationStatus[request.id]?.paymentReceived && handleMarkPaymentReceived(request.id)}
+                            disabled={!finalizationStatus[request.id]?.actSigned || finalizationStatus[request.id]?.paymentReceived}
+                          />
+                          <span>💰 Оплата получена</span>
+                        </label>
+                      </div>
+
+                      {/* 🔥 СЕКЦИЯ ФИНАЛЬНОЙ ОПЛАТЫ (после завершения работ) */}
+                      {/* 🔥 СЕКЦИЯ ФИНАЛЬНОЙ ОПЛАТЫ (после завершения работ) */}
+                      {(request.status === RequestStatus.Completed || finalInvoiceInfo[request.id]?.generated) && (
+                        <div className={styles.finalPaymentSection}>
+                          <h4 className={styles.sectionTitle}>💰 Оплата работ</h4>
+                          <p className={styles.sectionHint}>
+                            ЗИП оплачен отдельно. Данный счёт — только за выполненные работы.
+                          </p>
+
+                          {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo вместо invoiceInfo */}
+                          {!finalInvoiceInfo[request.id]?.generated ? (
+                            <button
+                              className={styles.generateFinalInvoiceBtn}
+                              onClick={() => handleGenerateFinalInvoice(request.id)}
+                              disabled={generatingInvoice[request.id]}
+                            >
+                              {generatingInvoice[request.id] ? (
+                                <span className={styles.loading}>
+                                  <span className={styles.spinner}></span>
+                                  Формирование...
+                                </span>
+                              ) : (
+                                '🧾 Сформировать счёт на оплату работ'
+                              )}
+                            </button>
+                          ) : (
+                            <div className={styles.invoiceDetails}>
+                              <div className={styles.invoiceRow}>
+                                <span>Сумма к оплате (работы):</span>
+                                <span className={styles.invoiceAmount}>
+                                  {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
+                                  {finalInvoiceInfo[request.id]?.amount?.toLocaleString('ru-RU')} ₽
+                                </span>
+                              </div>
+
+                              {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
+                              {finalInvoiceInfo[request.id]?.filePath && (
+                                <a
+                                  href={`https://localhost:7053/${finalInvoiceInfo[request.id]?.filePath}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={styles.viewInvoiceLink}
+                                >
+                                  📄 Просмотреть счёт (PDF)
+                                </a>
+                              )}
+
+                              {/* Статус чека */}
+                              <div className={styles.receiptStatus}>
+                                {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
+                                {finalInvoiceInfo[request.id]?.receiptUploaded ? (
+                                  <>
+                                    <span className={styles.receiptUploaded}>
+                                      ✅ Чек загружен клиентом
+                                    </span>
+                                    {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
+                                    {finalInvoiceInfo[request.id]?.receiptPath && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          window.open(`https://localhost:7053/${finalInvoiceInfo[request.id]?.receiptPath}`, '_blank');
+                                        }}
+                                        className={styles.viewReceiptLink}
+                                      >
+                                        👁️ Просмотреть чек
+                                      </button>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className={styles.receiptPending}>
+                                    ⏳ Ожидается загрузка чека от клиента
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Кнопка подтверждения оплаты */}
+                              {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
+                              {!finalInvoiceInfo[request.id]?.isPaid && finalInvoiceInfo[request.id]?.receiptUploaded && (
+                                <button
+                                  className={styles.confirmPaymentBtn}
+                                  onClick={() => handleConfirmFinalPayment(request.id)}
+                                  disabled={confirmingPayment[request.id]}
+                                >
+                                  {confirmingPayment[request.id] ? (
+                                    <span className={styles.loading}>
+                                      <span className={styles.spinner}></span>
+                                      Подтверждение...
+                                    </span>
+                                  ) : (
+                                    '✅ Подтвердить оплату работ'
+                                  )}
+                                </button>
+                              )}
+
+                              {/* Оплата подтверждена */}
+                              {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
+                              {finalInvoiceInfo[request.id]?.isPaid && (
+                                <div className={styles.paymentConfirmed}>
+                                  ✅ Оплата работ подтверждена — заявка полностью завершена
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Кнопка генерации гарантии */}
+                      {(finalizationStatus[request.id]?.paymentReceived || finalInvoiceInfo[request.id]?.isPaid) &&
+                        !finalizationStatus[request.id]?.warrantyExists && (
+                          <button
+                            className={styles.warrantyBtn}
+                            onClick={() => handleGenerateWarranty(request.id)}
+                          >
+                            📄 Сформировать гарантийный талон
+                          </button>
+                        )}
+
+                      {/* Ссылка на готовый талон */}
+                      {finalizationStatus[request.id]?.warrantyExists && (
+                        <div className={styles.warrantyReady}>
+                          <p>✅ Гарантийный талон готов</p>
+
+                          {!finalizationStatus[request.id]?.sentToClient ? (
+                            <button
+                              className={styles.sendToClientBtn}
+                              onClick={() => handleSendWarrantyToClient(request.id)}
+                            >
+                              📤 Отправить клиенту
+                            </button>
+                          ) : (
+                            <div className={styles.sentBadge}>
+                              <span>✅ Отправлен клиенту</span>
+                            </div>
+                          )}
+
+                          <a
+                            href={`https://localhost:7053/${finalizationStatus[request.id]!.warrantyPath!}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={styles.downloadLink}
+                          >
+                            📥 Скачать
+                          </a>
                         </div>
                       )}
                     </div>
@@ -1290,10 +2136,13 @@ const RequestsAdmin: React.FC = () => {
         <div className={styles.modalOverlay} onClick={handleCloseAssignModal}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h3 className={styles.modalTitle}>Назначение наряда на диагностику</h3>
-              <button className={styles.modalClose} onClick={handleCloseAssignModal}>
-                ✕
-              </button>
+              <h3 className={styles.modalTitle}>
+                {/* 🔥 Динамический заголовок */}
+                {assignModal.requestId && allRequests.find(r => r.id === assignModal.requestId)?.assignedEngineerFio
+                  ? '✅ Наряд назначен'
+                  : 'Назначение наряда на диагностику'}
+              </h3>
+              <button className={styles.modalClose} onClick={handleCloseAssignModal}>✕</button>
             </div>
 
             <div className={styles.modalBody}>
@@ -1304,8 +2153,17 @@ const RequestsAdmin: React.FC = () => {
                 </div>
               ) : (
                 <>
+                  {/* 🔥 Сообщение о результате */}
+                  {allRequests.find(r => r.id === assignModal.requestId)?.assignedEngineerFio && (
+                    <p className={styles.modalSuccess}>
+                      ✅ Наряд на ремонт успешно назначен!
+                    </p>
+                  )}
+
                   <p className={styles.modalText}>
-                    Система автоматически подобрала специалиста для выполнения диагностики:
+                    {allRequests.find(r => r.id === assignModal.requestId)?.assignedEngineerFio
+                      ? 'Для выполнения работ назначен специалист:'
+                      : 'Система автоматически подобрала специалиста для выполнения диагностики:'}
                   </p>
 
                   <div className={styles.engineerCard}>
@@ -1316,9 +2174,11 @@ const RequestsAdmin: React.FC = () => {
                       <div className={styles.engineerName}>
                         {assignModal.engineer.fio}
                       </div>
-                      <div className={styles.engineerTabNumber}>
-                        Табельный номер: <strong>{assignModal.engineer.tabNumber}</strong>
-                      </div>
+                      {assignModal.engineer.tabNumber && (
+                        <div className={styles.engineerTabNumber}>
+                          Табельный номер: <strong>{assignModal.engineer.tabNumber}</strong>
+                        </div>
+                      )}
                       {assignModal.engineer.specialization && (
                         <div className={styles.engineerSpecialization}>
                           Специализация: {assignModal.engineer.specialization}
@@ -1327,8 +2187,22 @@ const RequestsAdmin: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* 🔥 Кнопка связи с инженером */}
+                  {allRequests.find(r => r.id === assignModal.requestId)?.assignedEngineerFio && (
+                    <button
+                      className={styles.contactEngineerBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                    >
+                      📞 Связаться с инженером
+                    </button>
+                  )}
+
                   <div className={styles.modalWarning}>
-                    После подтверждения заявка будет переведена в статус "В работе"
+                    {allRequests.find(r => r.id === assignModal.requestId)?.assignedEngineerFio
+                      ? 'Заявка переведена в статус "В работе". Инженер получит уведомление.'
+                      : 'После подтверждения заявка будет переведена в статус "В работе"'}
                   </div>
                 </>
               )}
@@ -1338,24 +2212,26 @@ const RequestsAdmin: React.FC = () => {
               <button
                 className={styles.modalCancelBtn}
                 onClick={handleCloseAssignModal}
-                disabled={assigningId !== null || !assignModal.engineer}
               >
-                Отмена
+                Закрыть
               </button>
-              <button
-                className={styles.modalConfirmBtn}
-                onClick={handleConfirmAssign}
-                disabled={assigningId !== null || !assignModal.engineer}
-              >
-                {assigningId !== null ? (
-                  <span className={styles.loading}>
-                    <span className={styles.spinner}></span>
-                    Подтверждение...
-                  </span>
-                ) : (
-                  'Подтвердить назначение наряда'
-                )}
-              </button>
+              {/* 🔥 Кнопка подтверждения только для диагностики */}
+              {!allRequests.find(r => r.id === assignModal.requestId)?.assignedEngineerFio && (
+                <button
+                  className={styles.modalConfirmBtn}
+                  onClick={handleConfirmAssign}
+                  disabled={assigningId !== null || !assignModal.engineer}
+                >
+                  {assigningId !== null ? (
+                    <span className={styles.loading}>
+                      <span className={styles.spinner}></span>
+                      Подтверждение...
+                    </span>
+                  ) : (
+                    'Подтвердить назначение наряда'
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

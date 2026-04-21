@@ -1,3 +1,4 @@
+// src/services/engineerTaskService.ts
 
 import { authService } from './authService';
 import { EngineerTask, EngineerStats } from '../pages/ServiceIngeneer/types';
@@ -55,6 +56,19 @@ export const engineerTaskService = {
     if (!response.ok) throw new Error('Не удалось завершить работу');
   },
 
+  // 🔥 НОВЫЙ МЕТОД: Завершение наряда на ремонт (с формированием PDF)
+  async completeRepairTask(taskId: number): Promise<void> {
+    const response = await authService.fetchWithAuth(
+      `https://localhost:7053/api/EngineerTask/my/${taskId}/complete-repair`,  // ← Исправлено!
+      { method: 'POST' }
+    );
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Не удалось завершить наряд на ремонт');
+    }
+  },
+
   async cancelTask(taskId: number, reason?: string): Promise<void> {
     const response = await authService.fetchWithAuth(
       `${API_BASE}/my/${taskId}/cancel`,
@@ -65,5 +79,28 @@ export const engineerTaskService = {
       }
     );
     if (!response.ok) throw new Error('Не удалось отменить наряд');
+  },
+  startAllTasksForRequest: async (requestId: number): Promise<void> => {
+    const response = await authService.fetchWithAuth(
+      `https://localhost:7053/api/EngineerTask/request/${requestId}/start-all`,
+      { method: 'POST' }
+    );
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Ошибка начала работ');
+    }
+  },
+
+  completeAllTasksForRequest: async (requestId: number): Promise<void> => {
+    const response = await authService.fetchWithAuth(
+      `https://localhost:7053/api/EngineerTask/request/${requestId}/complete-all`,
+      { method: 'POST' }
+    );
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Ошибка завершения работ');
+    }
   }
 };
