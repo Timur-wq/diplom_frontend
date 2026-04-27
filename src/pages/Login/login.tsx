@@ -213,9 +213,9 @@ const Login: React.FC = () => {
         </div>
 
         {/* Забыли пароль */}
-        <div className={styles.forgotPassword}>
+        {/* <div className={styles.forgotPassword}>
           <a href="/forgot-password">Забыли пароль?</a>
-        </div>
+        </div> */}
 
         {/* Кнопка входа */}
         <Button

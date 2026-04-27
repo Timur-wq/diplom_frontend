@@ -95,6 +95,7 @@ interface Filters {
 }
 
 const RequestsAdmin: React.FC = () => {
+  const [contractFullySigned, setContractFullySigned] = useState<Record<number, boolean>>({});
   const [allRequests, setAllRequests] = useState<RequestDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +110,8 @@ const RequestsAdmin: React.FC = () => {
   // Состояние
   const [finalizationStatus, setFinalizationStatus] = useState<Record<number, FinalizationStatus>>({});
 
+  const [contractRegenerated, setContractRegenerated] = useState<Record<number, boolean>>({});
+
 
   const [spareStatus, setSpareStatus] = useState<{
     hasPendingOrders: boolean;
@@ -119,6 +122,84 @@ const RequestsAdmin: React.FC = () => {
       supplierName: string;
     }>;
   } | null>(null);
+
+  // Перегенерация договора с подписями
+  const handleRegenerateContractWithSignatures = async (requestId: number) => {
+    const contractId = contractIds[requestId];
+    if (!contractId) {
+      alert('Не удалось найти договор');
+      return;
+    }
+
+    if (!window.confirm('Перегенерировать договор с электронными подписями?')) return;
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/dispatcher/Document/contract/${contractId}/regenerate-with-signatures`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) throw new Error('Не удалось перегенерировать договор');
+
+      const result = await response.json();
+      alert('✅ Договор перегенерирован с подписями!');
+
+      // 🔥 ОТМЕЧАЕМ, ЧТО ДОГОВОР БЫЛ ПЕРЕГЕНЕРИРОВАН
+      setContractRegenerated(prev => ({
+        ...prev,
+        [requestId]: true
+      }));
+
+      // Обновляем информацию о договоре
+      await checkContractSigned(requestId);
+    } catch (error: any) {
+      console.error('Ошибка перегенерации договора:', error);
+      alert(error.message || 'Не удалось перегенерировать договор');
+    }
+  };
+
+  const handleSignContractByDispatcher = async (requestId: number) => {
+    const contractId = contractIds[requestId];
+    if (!contractId) {
+      alert('Не удалось найти договор');
+      return;
+    }
+
+    if (!window.confirm('Подписать договор от имени диспетчера?')) return;
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/dispatcher/Document/contract/${contractId}/dispatcher-sign`,
+        { method: 'POST' }
+      );
+
+      if (response.ok) {
+        alert('✅ Договор подписан диспетчером');
+
+        // 🔥 ОБНОВЛЯЕМ СОСТОЯНИЕ
+        setSignedContracts(prev => ({
+          ...prev,
+          [requestId]: true
+        }));
+
+        // 🔥 УСТАНАВЛИВАЕМ, ЧТО ДОГОВОР ПОЛНОСТЬЮ ПОДПИСАН
+        setContractFullySigned(prev => ({
+          ...prev,
+          [requestId]: true
+        }));
+
+        // 🔥 Загружаем статус финализации для обновления UI
+        await loadFinalizationStatus(requestId);
+
+        // 🔥 Обновляем все данные
+        refreshData();
+      } else {
+        throw new Error('Не удалось подписать договор');
+      }
+    } catch (error: any) {
+      alert(error.message || 'Ошибка при подписании договора');
+    }
+  };
 
 
 
@@ -228,6 +309,15 @@ const RequestsAdmin: React.FC = () => {
       alert(e.message || 'Ошибка');
     }
   };
+
+  // 🔥 НОВЫЙ useEffect для проверки статуса договоров при загрузке
+  useEffect(() => {
+    if (allRequests.length > 0) {
+      allRequests.forEach(request => {
+        checkContractSigned(request.id);
+      });
+    }
+  }, [allRequests]);
 
   // Генерация гарантийного талона
   const handleGenerateWarranty = async (requestId: number) => {
@@ -426,6 +516,7 @@ const RequestsAdmin: React.FC = () => {
   const [generatingInvoice, setGeneratingInvoice] = useState<Record<number, boolean>>({});
   const [confirmingPayment, setConfirmingPayment] = useState<Record<number, boolean>>({});
 
+
   // Фильтры (клиентские)
   const [filters, setFilters] = useState<Filters>({
     status: 'All',
@@ -455,32 +546,39 @@ const RequestsAdmin: React.FC = () => {
   const [diagnosticActs, setDiagnosticActs] = useState<Record<number, boolean>>({});
   const navigate = useNavigate();
 
-  // Функция для проверки статуса подписания при загрузке:
   const checkContractSigned = async (requestId: number) => {
     try {
       const response = await authService.fetchWithAuth(
         `https://localhost:7053/api/dispatcher/Document/request/${requestId}/contract`
       );
-
       if (response.ok) {
         const contract = await response.json();
+
+        // 1. Сохраняем, что договор найден (для чекбокса)
         setSignedContracts(prev => ({
           ...prev,
           [requestId]: contract.isSignedByClient
         }));
+
         if (contract.contractId) {
           setContractIds(prev => ({
             ...prev,
             [requestId]: contract.contractId
           }));
         }
+
+        // 2. 🔥 ГЛАВНОЕ: Проверяем статус
+        // Если статус "Signed" — значит диспетчер тоже подписал!
+        if (contract.status === "Signed") {
+          console.log(`✅ [Договор #${requestId}] Статус: Signed — полностью подписан!`);
+          setContractFullySigned(prev => ({
+            ...prev,
+            [requestId]: true
+          }));
+        }
       }
     } catch (error) {
       console.log(`Договор для заявки ${requestId} ещё не создан`);
-      setSignedContracts(prev => ({
-        ...prev,
-        [requestId]: undefined
-      }));
     }
   };
 
@@ -491,15 +589,13 @@ const RequestsAdmin: React.FC = () => {
       alert('Не удалось найти договор');
       return;
     }
-
     if (!window.confirm('Отметить договор как подписанный клиентом?')) return;
-
     try {
+      // 🔥 ИСПОЛЬЗУЕМ НОВЫЙ ЭНДПОИНТ
       const response = await authService.fetchWithAuth(
-        `https://localhost:7053/api/dispatcher/Document/contract/${contractId}/mark-signed`,
+        `https://localhost:7053/api/dispatcher/Document/contract/${contractId}/client-sign`,
         { method: 'POST' }
       );
-
       if (response.ok) {
         setSignedContracts(prev => ({
           ...prev,
@@ -803,6 +899,8 @@ const RequestsAdmin: React.FC = () => {
 
       if (request?.status === RequestStatus.ApprovedByClient) {
         checkSpareStatus(id);
+        // 🔥 ДОБАВЬТЕ ЭТУ СТРОКУ:
+        loadFinalizationStatus(id);
       }
 
       if (request?.status === RequestStatus.Completed) {
@@ -1260,6 +1358,8 @@ const RequestsAdmin: React.FC = () => {
     }
   };
 
+
+
   return (
     <div className={styles.container}>
       <h1 className={styles.title}>Управление заявками</h1>
@@ -1570,179 +1670,213 @@ const RequestsAdmin: React.FC = () => {
                           </span>
                         </label>
                       )}
-                    </div>
-                  )}
-
-                  {signedContracts[request.id] === true && !invoiceInfo[request.id]?.isPaid && (
-                    <div className={styles.invoiceSection}>
-                      <div className={styles.sectionTitle}>🧾 Счёт на предоплату</div>
-
-                      {!invoiceInfo[request.id]?.generated && (
+                      {/* 🔥 Кнопка для подписания договора диспетчером */}
+                      {/* Показываем кнопку ТОЛЬКО если договор подписан клиентом И НЕ подписан диспетчером */}
+                      {signedContracts[request.id] === true && !contractFullySigned[request.id] && (
                         <button
-                          className={styles.generateInvoiceBtn}
-                          onClick={() => handleGenerateInvoice(request.id)}
-                          disabled={generatingInvoice[request.id]}
+                          className={styles.signContractByDispatcherBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSignContractByDispatcher(request.id);
+                          }}
                         >
-                          {generatingInvoice[request.id] ? (
-                            <span className={styles.loading}>
-                              <span className={styles.spinner}></span>
-                              Формирование...
-                            </span>
-                          ) : (
-                            '🧾 Сформировать счёт на предоплату'
-                          )}
+                          ️ Подписать договор диспетчером
                         </button>
                       )}
-
-                      {invoiceInfo[request.id]?.generated && (
-                        <div className={styles.invoiceDetails}>
-                          <div className={styles.invoiceRow}>
-                            <span>Сумма к оплате (только ЗИП):</span>
-                            <span className={styles.invoiceAmount}>
-                              {invoiceInfo[request.id]?.amount?.toLocaleString('ru-RU')} ₽
-                            </span>
+                      {/* Кнопка перегенерации договора с подписями */}
+                      {signedContracts[request.id] === true &&
+                        contractFullySigned[request.id] &&
+                        !contractRegenerated[request.id] && (  // ← Показываем только если ещё не перегенерирован
+                          <button
+                            className={styles.regenerateContractBtn}
+                            onClick={() => handleRegenerateContractWithSignatures(request.id)}
+                            title="Перегенерировать договор с визуальными подписями"
+                          >
+                            🔄 Перегенерировать с подписями
+                          </button>
+                        )}
+                      {/* Сообщение если договор уже полностью обработан */}
+                      {signedContracts[request.id] === true &&
+                        contractFullySigned[request.id] &&
+                        contractRegenerated[request.id] && (
+                          <div className={styles.contractCompletedBadge}>
+                            ✅ Договор полностью подписан обеими сторонами
                           </div>
-
-                          {invoiceInfo[request.id]?.filePath && (
-                            <a
-                              href={`https://localhost:7053/${invoiceInfo[request.id]?.filePath}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={styles.viewInvoiceLink}
-                            >
-                              📄 Просмотреть счёт (PDF)
-                            </a>
-                          )}
-
-                          <div className={styles.receiptStatus}>
-                            {invoiceInfo[request.id]?.receiptUploaded ? (
-                              <>
-                                <span className={styles.receiptUploaded}>
-                                  ✅ Чек загружен клиентом
-                                </span>
-                                {invoiceInfo[request.id]?.receiptUploaded && (
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      try {
-                                        // 🔥 Скачиваем файл с токеном авторизации
-                                        const response = await authService.fetchWithAuth(
-                                          `https://localhost:7053/api/dispatcher/Document/invoice/${request.id}/receipt/download`
-                                        );
-
-                                        if (!response.ok) {
-                                          throw new Error('Не удалось скачать чек');
-                                        }
-
-                                        // 🔥 Получаем blob
-                                        const blob = await response.blob();
-
-                                        // 🔥 Создаём URL для blob
-                                        const blobUrl = window.URL.createObjectURL(blob);
-
-                                        // 🔥 Открываем в новой вкладке
-                                        window.open(blobUrl, '_blank');
-
-                                        // 🔥 Очищаем URL через некоторое время
-                                        setTimeout(() => {
-                                          window.URL.revokeObjectURL(blobUrl);
-                                        }, 60000);
-
-                                      } catch (error: any) {
-                                        console.error('Ошибка скачивания чека:', error);
-                                        alert(error.message || 'Не удалось скачать чек');
-                                      }
-                                    }}
-                                    className={styles.viewReceiptLink}
-                                  >
-                                    👁️ Просмотреть чек
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              <span className={styles.receiptPending}>
-                                ⏳ Ожидается загрузка чека от клиента
-                              </span>
-                            )}
-                          </div>
-
-                          {!invoiceInfo[request.id]?.isPaid && invoiceInfo[request.id]?.receiptUploaded && (
-                            <button
-                              className={styles.confirmPaymentBtn}
-                              onClick={() => handleConfirmPrepayment(request.id)}
-                              disabled={confirmingPayment[request.id]}
-                            >
-                              {confirmingPayment[request.id] ? (
-                                <span className={styles.loading}>
-                                  <span className={styles.spinner}></span>
-                                  Подтверждение...
-                                </span>
-                              ) : (
-                                '✅ Подтвердить предоплату'
-                              )}
-                            </button>
-                          )}
-
-                          {invoiceInfo[request.id]?.isPaid && (
-                            <div className={styles.paymentConfirmed}>
-                              ✅ Предоплата подтверждена — работы могут начинаться
-                            </div>
-                          )}
-                          {/* 🔥 СЕКЦИЯ С АКТАМИ (только для завершённых заявок) */}
-
-                        </div>
-                      )}
-
-
-
-                      {request?.status === RequestStatus.ApprovedByClient && (
-                        <div className={styles.actionSection}>
-                          {spareStatus?.hasPendingOrders ? (
-                            // 🔥 ЕСТЬ неподтверждённые заявки → показываем кнопку отправки в ОМТС
-                            <div className={styles.pendingSparesAlert}>
-                              <h3>⚠️ Требуется закупка ЗИП:</h3>
-                              <ul>
-                                {spareStatus.pendingOrders.map((order, idx) => (
-                                  <li key={idx}>
-                                    {order.spareName} × {order.quantity} шт.
-                                    ({order.supplierName})
-                                  </li>
-                                ))}
-                              </ul>
-
-                              <button
-                                className={styles.confirmOrdersBtn}
-                                onClick={handleConfirmSpareOrders}
-                              >
-                                📦 Отправить заявку на ЗИП в ОМТС
-                              </button>
-
-                              <p className={styles.hint}>
-                                После поступления ЗИП на склад станет доступна кнопка
-                                "Назначить наряд"
-                              </p>
-                            </div>
-                          ) : (
-                            // 🔥 НЕТ неподтверждённых заявок → все ЗИП на складе
-                            <button
-                              className={styles.assignWorkOrderBtn}
-                              onClick={() => handleCreateWorkOrder(request.id)}  // ← Добавлено!
-                              disabled={creatingWorkOrder[request.id]}           // ← Добавлено!
-                            >
-                              {creatingWorkOrder[request.id] ? (                 // ← Добавлено!
-                                <span className={styles.loading}>
-                                  <span className={styles.spinner}></span>
-                                  Назначение...
-                                </span>
-                              ) : (
-                                '🔧 Назначить наряд на ремонт'
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      )}
+                        )}
                     </div>
                   )}
+
+                  {signedContracts[request.id] === true &&
+                    !invoiceInfo[request.id]?.isPaid && (
+                      <div className={styles.invoiceSection}>
+                        <div className={styles.sectionTitle}>🧾 Счёт на предоплату</div>
+
+                        {!invoiceInfo[request.id]?.generated && (
+                          <button
+                            className={styles.generateInvoiceBtn}
+                            onClick={() => handleGenerateInvoice(request.id)}
+                            disabled={generatingInvoice[request.id]}
+                          >
+                            {generatingInvoice[request.id] ? (
+                              <span className={styles.loading}>
+                                <span className={styles.spinner}></span>
+                                Формирование...
+                              </span>
+                            ) : (
+                              '🧾 Сформировать счёт на предоплату'
+                            )}
+                          </button>
+                        )}
+
+                        {invoiceInfo[request.id]?.generated && (
+                          <div className={styles.invoiceDetails}>
+                            <div className={styles.invoiceRow}>
+                              <span>Сумма к оплате (только ЗИП):</span>
+                              <span className={styles.invoiceAmount}>
+                                {invoiceInfo[request.id]?.amount?.toLocaleString('ru-RU')} ₽
+                              </span>
+                            </div>
+
+                            {invoiceInfo[request.id]?.filePath && (
+                              <a
+                                href={`https://localhost:7053/${invoiceInfo[request.id]?.filePath}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={styles.viewInvoiceLink}
+                              >
+                                📄 Просмотреть счёт (PDF)
+                              </a>
+                            )}
+
+                            <div className={styles.receiptStatus}>
+                              {invoiceInfo[request.id]?.receiptUploaded ? (
+                                <>
+                                  <span className={styles.receiptUploaded}>
+                                    ✅ Чек загружен клиентом
+                                  </span>
+                                  {invoiceInfo[request.id]?.receiptUploaded && (
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          // 🔥 Скачиваем файл с токеном авторизации
+                                          const response = await authService.fetchWithAuth(
+                                            `https://localhost:7053/api/dispatcher/Document/invoice/${request.id}/receipt/download`
+                                          );
+
+                                          if (!response.ok) {
+                                            throw new Error('Не удалось скачать чек');
+                                          }
+
+                                          // 🔥 Получаем blob
+                                          const blob = await response.blob();
+
+                                          // 🔥 Создаём URL для blob
+                                          const blobUrl = window.URL.createObjectURL(blob);
+
+                                          // 🔥 Открываем в новой вкладке
+                                          window.open(blobUrl, '_blank');
+
+                                          // 🔥 Очищаем URL через некоторое время
+                                          setTimeout(() => {
+                                            window.URL.revokeObjectURL(blobUrl);
+                                          }, 60000);
+
+                                        } catch (error: any) {
+                                          console.error('Ошибка скачивания чека:', error);
+                                          alert(error.message || 'Не удалось скачать чек');
+                                        }
+                                      }}
+                                      className={styles.viewReceiptLink}
+                                    >
+                                      👁️ Просмотреть чек
+                                    </button>
+                                  )}
+                                </>
+                              ) : (
+                                <span className={styles.receiptPending}>
+                                  ⏳ Ожидается загрузка чека от клиента
+                                </span>
+                              )}
+                            </div>
+
+                            {!invoiceInfo[request.id]?.isPaid && invoiceInfo[request.id]?.receiptUploaded && (
+                              <button
+                                className={styles.confirmPaymentBtn}
+                                onClick={() => handleConfirmPrepayment(request.id)}
+                                disabled={confirmingPayment[request.id]}
+                              >
+                                {confirmingPayment[request.id] ? (
+                                  <span className={styles.loading}>
+                                    <span className={styles.spinner}></span>
+                                    Подтверждение...
+                                  </span>
+                                ) : (
+                                  '✅ Подтвердить предоплату'
+                                )}
+                              </button>
+                            )}
+
+                            {invoiceInfo[request.id]?.isPaid && (
+                              <div className={styles.paymentConfirmed}>
+                                ✅ Предоплата подтверждена — работы могут начинаться
+                              </div>
+                            )}
+                            {/* 🔥 СЕКЦИЯ С АКТАМИ (только для завершённых заявок) */}
+
+                          </div>
+                        )}
+
+
+
+                        {request?.status === RequestStatus.ApprovedByClient && (
+                          <div className={styles.actionSection}>
+                            {spareStatus?.hasPendingOrders ? (
+                              // 🔥 ЕСТЬ неподтверждённые заявки → показываем кнопку отправки в ОМТС
+                              <div className={styles.pendingSparesAlert}>
+                                <h3>⚠️ Требуется закупка ЗИП:</h3>
+                                <ul>
+                                  {spareStatus.pendingOrders.map((order, idx) => (
+                                    <li key={idx}>
+                                      {order.spareName} × {order.quantity} шт.
+                                      ({order.supplierName})
+                                    </li>
+                                  ))}
+                                </ul>
+
+                                <button
+                                  className={styles.confirmOrdersBtn}
+                                  onClick={handleConfirmSpareOrders}
+                                >
+                                  📦 Отправить заявку на ЗИП в ОМТС
+                                </button>
+
+                                <p className={styles.hint}>
+                                  После поступления ЗИП на склад станет доступна кнопка
+                                  "Назначить наряд"
+                                </p>
+                              </div>
+                            ) : (
+                              // 🔥 НЕТ неподтверждённых заявок → все ЗИП на складе
+                              <button
+                                className={styles.assignWorkOrderBtn}
+                                onClick={() => handleCreateWorkOrder(request.id)}  // ← Добавлено!
+                                disabled={creatingWorkOrder[request.id]}           // ← Добавлено!
+                              >
+                                {creatingWorkOrder[request.id] ? (                 // ← Добавлено!
+                                  <span className={styles.loading}>
+                                    <span className={styles.spinner}></span>
+                                    Назначение...
+                                  </span>
+                                ) : (
+                                  '🔧 Назначить наряд на ремонт'
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                   {/* ✅ СЕКЦИЯ С АКТАМИ */}
                   {request.status === RequestStatus.Completed && taskActs[request.id] && (

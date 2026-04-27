@@ -199,6 +199,58 @@
   color: #721c24 !important;
 }
 
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+  
+  .title {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .filtersPanel {
+    padding: 1rem;
+  }
+  
+  .filtersGrid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .quickFilters {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .quickFilterBtn {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .requestHeader {
+    padding: 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .requestInfo {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .requestActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .detailsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .rejectReason {
   color: #721c24;
   background: #f8d7da;
@@ -680,4 +732,287 @@
   border-radius: 6px;
   font-weight: 600;
   text-align: center;
+}
+.viewContractBtn {
+  background: #6c5ce7;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: #5b4cdb;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
+  }
+  
+  &:disabled {
+    background: #b8b8b8;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+// Секция подписания договора
+.contractSignatureSection {
+  margin-top: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  border: 2px solid #fdcb6e;
+  border-radius: 12px;
+}
+
+.signatureInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.signatureText {
+  margin: 0;
+  font-size: 14px;
+  color: #2d3436;
+  font-weight: 500;
+  text-align: center;
+}
+
+.signContractBtn {
+  background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(108, 92, 231, 0.4);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+// Бейдж подписанного договора
+.contractSignedBadge {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+  border: 2px solid #28a745;
+  border-radius: 8px;
+  color: #155724;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+// Секция ожидания подписи диспетчера
+.contractPendingSection {
+  margin-top: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  border: 2px solid #fdcb6e;
+  border-radius: 12px;
+}
+
+.pendingInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pendingText {
+  margin: 0;
+  font-size: 14px;
+  color: #2d3436;
+  font-weight: 500;
+}
+
+.pendingHint {
+  margin: 0;
+  font-size: 13px;
+  color: #636e72;
+}
+
+// Секция полностью подписанного договора
+.contractFullySignedSection {
+  margin-top: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+  border: 2px solid #28a745;
+  border-radius: 12px;
+}
+
+.fullySignedInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fullySignedText {
+  margin: 0;
+  font-size: 14px;
+  color: #155724;
+  font-weight: 600;
+}
+
+.signatureDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+}
+
+.signatureDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  
+  strong {
+    color: #2d3436;
+  }
+  
+  span {
+    color: #636e72;
+  }
+}
+
+.downloadSignedContractBtn {
+  background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  margin-top: 8px;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 184, 148, 0.3);
+  }
+}
+// Адаптивность для фильтров
+.filtersPanel {
+  @media (max-width: 768px) {
+    padding: 16px;
+  }
+}
+
+.filtersGrid {
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.quickFilters {
+  @media (max-width: 640px) {
+    flex-direction: column;
+    gap: 8px;
+    
+    button {
+      width: 100%;
+    }
+  }
+}
+
+// Адаптивность для карточек заявок
+.requestCard {
+  @media (max-width: 640px) {
+    margin-bottom: 12px;
+  }
+}
+
+.requestHeader {
+  @media (max-width: 640px) {
+    padding: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
+
+.requestInfo {
+  @media (max-width: 640px) {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+.requestId {
+  @media (max-width: 640px) {
+    font-size: 14px;
+  }
+}
+
+.requestDevice {
+  @media (max-width: 640px) {
+    font-size: 13px;
+  }
+}
+
+// Адаптивность для деталей
+.detailsGrid {
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+// Адаптивность для кнопок действий
+.actionsRow {
+  @media (max-width: 640px) {
+    flex-direction: column;
+    gap: 8px;
+    
+    button {
+      width: 100%;
+    }
+  }
+}
+
+// Секция подписания
+.signatureGrid {
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.signatureCard {
+  @media (max-width: 640px) {
+    padding: 16px;
+  }
 }

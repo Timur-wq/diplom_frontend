@@ -211,7 +211,7 @@ const RequestForm: React.FC = () => {
 
       console.log('Отправка данных:', requestData);
 
-      const response = await fetch(`${API_URL}/createRequest`, {
+      const response = await fetch(`${API_URL}/Request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData),

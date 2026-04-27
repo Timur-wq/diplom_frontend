@@ -2002,3 +2002,94 @@ $breakpoint-mobile: 768px;
   margin-bottom: 1rem;
   font-style: italic;
 }
+.contractSigningAlert {
+  margin: 16px 0;
+  padding: 16px;
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  border: 2px solid #fdcb6e;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  
+  .alertIcon {
+    font-size: 32px;
+  }
+  
+  .alertContent {
+    flex: 1;
+    
+    h4 {
+      margin: 0 0 8px 0;
+      color: #2d3436;
+      font-size: 16px;
+    }
+    
+    p {
+      margin: 0;
+      color: #636e72;
+      font-size: 14px;
+    }
+  }
+}
+.signContractByDispatcherBtn {
+  background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 10px;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 184, 148, 0.3);
+  }
+}
+
+.signBtn {
+  background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 12px;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
+  }
+}
+.regenerateContractBtn {
+  background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 10px;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(253, 203, 110, 0.3);
+  }
+}
+.contractCompletedBadge {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+  border: 2px solid #28a745;
+  border-radius: 8px;
+  color: #155724;
+  font-weight: 600;
+  font-size: 14px;
+}

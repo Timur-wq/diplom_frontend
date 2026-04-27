@@ -17,6 +17,11 @@ const navItems: NavItem[] = [
     label: 'Заявки',
     icon: '',
   },
+  {
+    path: '/admin/staff',
+    label: 'Сотрудники',
+    icon: '',
+  },
 
 ];
 

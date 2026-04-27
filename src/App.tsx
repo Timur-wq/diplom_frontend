@@ -17,6 +17,7 @@ import ClientLayout from './pages/Client/ClientLayout';
 import DiagnosticActView from './pages/Admin/DiagnosticActView';
 import ClientDiagnosticActView from './pages/Client/ClientDiagnosticActView';
 import GoodsReceiptPage from './pages/Omt/GoodsRecieptPage';
+import StaffManagement from './pages/Admin/StaffManagement';
 
 
 function App() {
@@ -48,6 +49,7 @@ function App() {
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="requests" element={<RequestsAdmin />} />
+          <Route path="staff" element={<StaffManagement />} />
         </Route>
 
         <Route path="/dispatcher/acts/:requestId" element={
