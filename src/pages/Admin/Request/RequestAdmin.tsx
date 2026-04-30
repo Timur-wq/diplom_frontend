@@ -112,6 +112,77 @@ const RequestsAdmin: React.FC = () => {
 
   const [contractRegenerated, setContractRegenerated] = useState<Record<number, boolean>>({});
 
+  // Добавьте после existing states
+  const [generatingReport, setGeneratingReport] = useState<Record<number, boolean>>({});
+  const [reportCodes, setReportCodes] = useState<Record<number, number>>({});
+
+
+
+  // Генерация отчёта для бухгалтерии
+  const handleGenerateReport = async (requestId: number) => {
+    if (!window.confirm('Сформировать отчёт для бухгалтерии?')) return;
+
+    setGeneratingReport(prev => ({ ...prev, [requestId]: true }));
+
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/admin/report/generate/${requestId}`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Не удалось сформировать отчёт');
+      }
+
+      const result = await response.json();
+
+      // Сохраняем код отчёта
+      setReportCodes(prev => ({
+        ...prev,
+        [requestId]: result.reportCode
+      }));
+
+      alert(`✅ Отчёт сформирован!\nКод отчёта: ${result.reportCode}`);
+
+      // Автоматически скачиваем отчёт
+      await handleDownloadReport(requestId, result.reportCode);
+
+    } catch (error: any) {
+      console.error('Ошибка генерации отчёта:', error);
+      alert(error.message || 'Не удалось сформировать отчёт');
+    } finally {
+      setGeneratingReport(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  // Скачивание отчёта
+  const handleDownloadReport = async (requestId: number, reportCode: number) => {
+    try {
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/admin/report/${reportCode}/file`
+      );
+
+      if (!response.ok) {
+        throw new Error('Не удалось скачать отчёт');
+      }
+
+      // Создаём blob и скачиваем файл
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Report_${reportCode}_Req${requestId}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (error: any) {
+      console.error('Ошибка скачивания отчёта:', error);
+      alert(error.message || 'Не удалось скачать отчёт');
+    }
+  };
 
   const [spareStatus, setSpareStatus] = useState<{
     hasPendingOrders: boolean;
@@ -1629,6 +1700,8 @@ const RequestsAdmin: React.FC = () => {
                     </div>
                   )}
 
+                  {/* 🔥 СЕКЦИЯ УПРАВЛЕНИЯ ДОГОВОРОМ */}
+                  {/* 🔥 СЕКЦИЯ УПРАВЛЕНИЯ ДОГОВОРОМ */}
                   {diagnosticActs[request.id] && (
                     <div className={styles.actionButtons}>
                       <button
@@ -1641,7 +1714,36 @@ const RequestsAdmin: React.FC = () => {
                         📋 Акт диагностики
                       </button>
 
-                      {!signedContracts[request.id] && (
+                      {/* 🔥 Кнопка просмотра договора (если договор существует) */}
+                      {contractIds[request.id] && (
+                        <button
+                          className={styles.viewContractBtn}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const response = await authService.fetchWithAuth(
+                                `https://localhost:7053/api/dispatcher/Document/request/${request.id}/contract`
+                              );
+                              if (!response.ok) throw new Error('Не удалось получить информацию о договоре');
+                              const contract = await response.json();
+                              if (contract.filePath) {
+                                window.open(`https://localhost:7053/${contract.filePath}`, '_blank');
+                              } else {
+                                alert('Договор ещё не сформирован');
+                              }
+                            } catch (error: any) {
+                              console.error('Ошибка открытия договора:', error);
+                              alert(error.message || 'Не удалось открыть договор');
+                            }
+                          }}
+                          title="Открыть договор"
+                        >
+                          📄 Просмотреть договор
+                        </button>
+                      )}
+
+                      {/* 🔥 Кнопка формирования договора (ТОЛЬКО если договора ещё нет) */}
+                      {!contractIds[request.id] && (
                         <button
                           className={styles.contractBtn}
                           onClick={async () => {
@@ -1653,7 +1755,8 @@ const RequestsAdmin: React.FC = () => {
                         </button>
                       )}
 
-                      {signedContracts[request.id] !== undefined && (
+                      {/* 🔥 Чекбокс отметки подписи клиентом (только если договор существует) */}
+                      {contractIds[request.id] && signedContracts[request.id] !== undefined && (
                         <label className={styles.signedCheckbox}>
                           <input
                             type="checkbox"
@@ -1670,8 +1773,8 @@ const RequestsAdmin: React.FC = () => {
                           </span>
                         </label>
                       )}
-                      {/* 🔥 Кнопка для подписания договора диспетчером */}
-                      {/* Показываем кнопку ТОЛЬКО если договор подписан клиентом И НЕ подписан диспетчером */}
+
+                      {/* 🔥 Кнопка подписания диспетчером (если клиент подписал, но диспетчер — нет) */}
                       {signedContracts[request.id] === true && !contractFullySigned[request.id] && (
                         <button
                           className={styles.signContractByDispatcherBtn}
@@ -1680,13 +1783,14 @@ const RequestsAdmin: React.FC = () => {
                             handleSignContractByDispatcher(request.id);
                           }}
                         >
-                          ️ Подписать договор диспетчером
+                          ✍️ Подписать договор диспетчером
                         </button>
                       )}
-                      {/* Кнопка перегенерации договора с подписями */}
+
+                      {/* 🔥 Кнопка перегенерации (если полностью подписан, но ещё не перегенерирован) */}
                       {signedContracts[request.id] === true &&
                         contractFullySigned[request.id] &&
-                        !contractRegenerated[request.id] && (  // ← Показываем только если ещё не перегенерирован
+                        !contractRegenerated[request.id] && (
                           <button
                             className={styles.regenerateContractBtn}
                             onClick={() => handleRegenerateContractWithSignatures(request.id)}
@@ -1695,7 +1799,8 @@ const RequestsAdmin: React.FC = () => {
                             🔄 Перегенерировать с подписями
                           </button>
                         )}
-                      {/* Сообщение если договор уже полностью обработан */}
+
+                      {/* ✅ Бейдж: договор полностью обработан */}
                       {signedContracts[request.id] === true &&
                         contractFullySigned[request.id] &&
                         contractRegenerated[request.id] && (
@@ -1706,140 +1811,130 @@ const RequestsAdmin: React.FC = () => {
                     </div>
                   )}
 
-                  {signedContracts[request.id] === true &&
-                    !invoiceInfo[request.id]?.isPaid && (
-                      <div className={styles.invoiceSection}>
-                        <div className={styles.sectionTitle}>🧾 Счёт на предоплату</div>
+                  {/* 🔥 СЕКЦИЯ СЧЁТА НА ПРЕДОПЛАТУ */}
+                  {signedContracts[request.id] === true && (
+                    <div className={styles.invoiceSection}>
+                      <div className={styles.sectionTitle}>🧾 Счёт на предоплату</div>
 
-                        {!invoiceInfo[request.id]?.generated && (
-                          <button
-                            className={styles.generateInvoiceBtn}
-                            onClick={() => handleGenerateInvoice(request.id)}
-                            disabled={generatingInvoice[request.id]}
-                          >
-                            {generatingInvoice[request.id] ? (
-                              <span className={styles.loading}>
-                                <span className={styles.spinner}></span>
-                                Формирование...
-                              </span>
-                            ) : (
-                              '🧾 Сформировать счёт на предоплату'
-                            )}
-                          </button>
-                        )}
+                      {!invoiceInfo[request.id]?.generated && (
+                        <button
+                          className={styles.generateInvoiceBtn}
+                          onClick={() => handleGenerateInvoice(request.id)}
+                          disabled={generatingInvoice[request.id]}
+                        >
+                          {generatingInvoice[request.id] ? (
+                            <span className={styles.loading}>
+                              <span className={styles.spinner}></span>
+                              Формирование...
+                            </span>
+                          ) : (
+                            '🧾 Сформировать счёт на предоплату'
+                          )}
+                        </button>
+                      )}
 
-                        {invoiceInfo[request.id]?.generated && (
-                          <div className={styles.invoiceDetails}>
-                            <div className={styles.invoiceRow}>
-                              <span>Сумма к оплате (только ЗИП):</span>
-                              <span className={styles.invoiceAmount}>
-                                {invoiceInfo[request.id]?.amount?.toLocaleString('ru-RU')} ₽
-                              </span>
-                            </div>
-
-                            {invoiceInfo[request.id]?.filePath && (
-                              <a
-                                href={`https://localhost:7053/${invoiceInfo[request.id]?.filePath}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={styles.viewInvoiceLink}
-                              >
-                                📄 Просмотреть счёт (PDF)
-                              </a>
-                            )}
-
-                            <div className={styles.receiptStatus}>
-                              {invoiceInfo[request.id]?.receiptUploaded ? (
-                                <>
-                                  <span className={styles.receiptUploaded}>
-                                    ✅ Чек загружен клиентом
-                                  </span>
-                                  {invoiceInfo[request.id]?.receiptUploaded && (
-                                    <button
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        try {
-                                          // 🔥 Скачиваем файл с токеном авторизации
-                                          const response = await authService.fetchWithAuth(
-                                            `https://localhost:7053/api/dispatcher/Document/invoice/${request.id}/receipt/download`
-                                          );
-
-                                          if (!response.ok) {
-                                            throw new Error('Не удалось скачать чек');
-                                          }
-
-                                          // 🔥 Получаем blob
-                                          const blob = await response.blob();
-
-                                          // 🔥 Создаём URL для blob
-                                          const blobUrl = window.URL.createObjectURL(blob);
-
-                                          // 🔥 Открываем в новой вкладке
-                                          window.open(blobUrl, '_blank');
-
-                                          // 🔥 Очищаем URL через некоторое время
-                                          setTimeout(() => {
-                                            window.URL.revokeObjectURL(blobUrl);
-                                          }, 60000);
-
-                                        } catch (error: any) {
-                                          console.error('Ошибка скачивания чека:', error);
-                                          alert(error.message || 'Не удалось скачать чек');
-                                        }
-                                      }}
-                                      className={styles.viewReceiptLink}
-                                    >
-                                      👁️ Просмотреть чек
-                                    </button>
-                                  )}
-                                </>
-                              ) : (
-                                <span className={styles.receiptPending}>
-                                  ⏳ Ожидается загрузка чека от клиента
-                                </span>
-                              )}
-                            </div>
-
-                            {!invoiceInfo[request.id]?.isPaid && invoiceInfo[request.id]?.receiptUploaded && (
-                              <button
-                                className={styles.confirmPaymentBtn}
-                                onClick={() => handleConfirmPrepayment(request.id)}
-                                disabled={confirmingPayment[request.id]}
-                              >
-                                {confirmingPayment[request.id] ? (
-                                  <span className={styles.loading}>
-                                    <span className={styles.spinner}></span>
-                                    Подтверждение...
-                                  </span>
-                                ) : (
-                                  '✅ Подтвердить предоплату'
-                                )}
-                              </button>
-                            )}
-
-                            {invoiceInfo[request.id]?.isPaid && (
-                              <div className={styles.paymentConfirmed}>
-                                ✅ Предоплата подтверждена — работы могут начинаться
-                              </div>
-                            )}
-                            {/* 🔥 СЕКЦИЯ С АКТАМИ (только для завершённых заявок) */}
-
+                      {invoiceInfo[request.id]?.generated && (
+                        <div className={styles.invoiceDetails}>
+                          <div className={styles.invoiceRow}>
+                            <span>Сумма к оплате (только ЗИП):</span>
+                            <span className={styles.invoiceAmount}>
+                              {invoiceInfo[request.id]?.amount?.toLocaleString('ru-RU')} ₽
+                            </span>
                           </div>
-                        )}
 
+                          {invoiceInfo[request.id]?.filePath && (
+                            <a
+                              href={`https://localhost:7053/${invoiceInfo[request.id]?.filePath}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.viewInvoiceLink}
+                            >
+                              📄 Просмотреть счёт (PDF)
+                            </a>
+                          )}
 
+                          <div className={styles.receiptStatus}>
+                            {invoiceInfo[request.id]?.receiptUploaded ? (
+                              <>
+                                <span className={styles.receiptUploaded}>
+                                  ✅ Чек загружен клиентом
+                                </span>
+                                {invoiceInfo[request.id]?.receiptUploaded && (
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        const response = await authService.fetchWithAuth(
+                                          `https://localhost:7053/api/dispatcher/Document/invoice/${request.id}/receipt/download`
+                                        );
 
-                        {request?.status === RequestStatus.ApprovedByClient && (
+                                        if (!response.ok) {
+                                          throw new Error('Не удалось скачать чек');
+                                        }
+
+                                        const blob = await response.blob();
+                                        const blobUrl = window.URL.createObjectURL(blob);
+                                        window.open(blobUrl, '_blank');
+
+                                        setTimeout(() => {
+                                          window.URL.revokeObjectURL(blobUrl);
+                                        }, 60000);
+
+                                      } catch (error: any) {
+                                        console.error('Ошибка скачивания чека:', error);
+                                        alert(error.message || 'Не удалось скачать чек');
+                                      }
+                                    }}
+                                    className={styles.viewReceiptLink}
+                                  >
+                                    👁️ Просмотреть чек
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <span className={styles.receiptPending}>
+                                ⏳ Ожидается загрузка чека от клиента
+                              </span>
+                            )}
+                          </div>
+
+                          {!invoiceInfo[request.id]?.isPaid && invoiceInfo[request.id]?.receiptUploaded && (
+                            <button
+                              className={styles.confirmPaymentBtn}
+                              onClick={() => handleConfirmPrepayment(request.id)}
+                              disabled={confirmingPayment[request.id]}
+                            >
+                              {confirmingPayment[request.id] ? (
+                                <span className={styles.loading}>
+                                  <span className={styles.spinner}></span>
+                                  Подтверждение...
+                                </span>
+                              ) : (
+                                '✅ Подтвердить предоплату'
+                              )}
+                            </button>
+                          )}
+
+                          {invoiceInfo[request.id]?.isPaid && (
+                            <div className={styles.paymentConfirmed}>
+                              ✅ Предоплата подтверждена
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 🔥 КНОПКА "НАЗНАЧИТЬ НАРЯД" — ТОЛЬКО КОГДА ВСЁ ГОТОВО */}
+                      {signedContracts[request.id] === true &&
+                        contractFullySigned[request.id] &&
+                        invoiceInfo[request.id]?.isPaid && (
                           <div className={styles.actionSection}>
                             {spareStatus?.hasPendingOrders ? (
-                              // 🔥 ЕСТЬ неподтверждённые заявки → показываем кнопку отправки в ОМТС
                               <div className={styles.pendingSparesAlert}>
                                 <h3>⚠️ Требуется закупка ЗИП:</h3>
                                 <ul>
                                   {spareStatus.pendingOrders.map((order, idx) => (
                                     <li key={idx}>
-                                      {order.spareName} × {order.quantity} шт.
-                                      ({order.supplierName})
+                                      {order.spareName} × {order.quantity} шт. ({order.supplierName})
                                     </li>
                                   ))}
                                 </ul>
@@ -1852,18 +1947,16 @@ const RequestsAdmin: React.FC = () => {
                                 </button>
 
                                 <p className={styles.hint}>
-                                  После поступления ЗИП на склад станет доступна кнопка
-                                  "Назначить наряд"
+                                  После поступления ЗИП на склад станет доступна кнопка "Назначить наряд"
                                 </p>
                               </div>
                             ) : (
-                              // 🔥 НЕТ неподтверждённых заявок → все ЗИП на складе
                               <button
                                 className={styles.assignWorkOrderBtn}
-                                onClick={() => handleCreateWorkOrder(request.id)}  // ← Добавлено!
-                                disabled={creatingWorkOrder[request.id]}           // ← Добавлено!
+                                onClick={() => handleCreateWorkOrder(request.id)}
+                                disabled={creatingWorkOrder[request.id]}
                               >
-                                {creatingWorkOrder[request.id] ? (                 // ← Добавлено!
+                                {creatingWorkOrder[request.id] ? (
                                   <span className={styles.loading}>
                                     <span className={styles.spinner}></span>
                                     Назначение...
@@ -1875,8 +1968,8 @@ const RequestsAdmin: React.FC = () => {
                             )}
                           </div>
                         )}
-                      </div>
-                    )}
+                    </div>
+                  )}
 
                   {/* ✅ СЕКЦИЯ С АКТАМИ */}
                   {request.status === RequestStatus.Completed && taskActs[request.id] && (
@@ -2189,6 +2282,47 @@ const RequestsAdmin: React.FC = () => {
                           >
                             📥 Скачать
                           </a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* 🔥 КНОПКА ГЕНЕРАЦИИ ОТЧЁТА ДЛЯ БУХГАЛТЕРИИ */}
+                  {/* 🔥 СЕКЦИЯ ОТЧЁТНОСТИ */}
+                  {request.status === RequestStatus.Completed && (
+                    <div className={styles.reportSection}>
+                      <h4 className={styles.sectionTitle}>📊 Отчётность</h4>
+
+                      {!reportCodes[request.id] ? (
+                        <button
+                          className={styles.generateReportBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleGenerateReport(request.id);
+                          }}
+                          disabled={generatingReport[request.id]}
+                        >
+                          {generatingReport[request.id] ? (
+                            <span className={styles.loading}>
+                              <span className={styles.spinner}></span>
+                              Формирование отчёта...
+                            </span>
+                          ) : (
+                            '📊 Сформировать отчёт для бухгалтерии'
+                          )}
+                        </button>
+                      ) : (
+                        <div className={styles.reportInfo}>
+                          <p>✅ Отчёт сформирован</p>
+                          <p><strong>Код отчёта:</strong> {reportCodes[request.id]}</p>
+                          <button
+                            className={styles.downloadReportBtn}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadReport(request.id, reportCodes[request.id]);
+                            }}
+                          >
+                            📥 Скачать отчёт (PDF)
+                          </button>
                         </div>
                       )}
                     </div>

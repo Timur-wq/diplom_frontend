@@ -18,6 +18,7 @@ import DiagnosticActView from './pages/Admin/DiagnosticActView';
 import ClientDiagnosticActView from './pages/Client/ClientDiagnosticActView';
 import GoodsReceiptPage from './pages/Omt/GoodsRecieptPage';
 import StaffManagement from './pages/Admin/StaffManagement';
+import Reports from './pages/Accountant/Reports';
 
 
 function App() {
@@ -69,6 +70,15 @@ function App() {
         <Route path="/engineer" element={<EngineerDashboard />} />
         {/* Форма акта диагностики (по taskId) */}
         <Route path="/engineer/task/:requestId/act" element={<DiagnosticActForm />} />
+
+        <Route
+          path="/accountant/reports"
+          element={
+            <ProtectedRoute roles={[UserRole.Accountant, UserRole.Dispatcher]}>
+              <Reports />
+            </ProtectedRoute>
+          }
+        />
 
       </Routes>
     </BrowserRouter>

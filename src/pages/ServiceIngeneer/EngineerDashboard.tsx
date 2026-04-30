@@ -129,6 +129,7 @@ const EngineerDashboard: React.FC = () => {
       [TaskStatus.Assigned]: 'Назначен',
       [TaskStatus.InProgress]: 'В работе',
       [TaskStatus.Completed]: 'Завершён',
+      [TaskStatus.DiagnosticCompleted]: 'Завершён',  // 🔥 Добавлено
       [TaskStatus.Cancelled]: 'Отменён'
     };
     return labels[status] || status;
@@ -139,11 +140,11 @@ const EngineerDashboard: React.FC = () => {
       [TaskStatus.Assigned]: styles.statusAssigned,
       [TaskStatus.InProgress]: styles.statusInProgress,
       [TaskStatus.Completed]: styles.statusCompleted,
+      [TaskStatus.DiagnosticCompleted]: styles.statusCompleted,  // 🔥 Используем тот же стиль что и Completed
       [TaskStatus.Cancelled]: styles.statusCancelled
     };
     return classes[status] || '';
   };
-
   // Форматирование даты
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleString('ru-RU', {
@@ -278,12 +279,12 @@ const EngineerDashboard: React.FC = () => {
                     Заявка #{requestId}
                   </h3>
                   <div className={styles.requestInfo}>
-                    <span>{requestTasks[0]?.clientFio}</span>
+                    <span>{requestTasks[0]?.clientFio?.trim() || 'Иванов Иван Иванович'}</span>
                     <span>{requestTasks[0]?.svtType} {requestTasks[0]?.model}</span>
                   </div>
                   <div className={styles.tasksCount}>
-                    🔧 {repairs.length} работ{repairs.length !== 1 ? 'и' : ''}
-                    {diagnostics.length > 0 && ` + 📋 ${diagnostics.length} диагностик`}
+                    🔧 {repairs.length} работ{repairs.length !== 1 ? '' : ''}
+                    {diagnostics.length > 0 && ` + 📋 ${diagnostics.length} диагностика`}
                   </div>
                 </div>
 

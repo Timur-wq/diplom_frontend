@@ -20,6 +20,7 @@ export enum TaskStatus {
   Assigned = 'assigned',
   InProgress = 'in_progress',
   Completed = 'completed',
+  DiagnosticCompleted = 'DiagnosticCompleted',
   Cancelled = 'cancelled'
 }
 

@@ -1,229 +1,434 @@
-// === Общие переменные ===
-$primary-color: #4299e1;
-$primary-dark: #3182ce;
-$success-color: #48bb78;
-$danger-color: #f56565;
-$warning-color: #ed8936;
-$text-primary: #1a202c;
-$text-secondary: #718096;
-$text-muted: #a0aec0;
-$bg-primary: #ffffff;
-$bg-secondary: #f7fafc;
-$bg-tertiary: #f5f7fa;
-$border-color: #e2e8f0;
-$shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-$shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
-$transition: all 0.2s ease;
-$border-radius: 12px;
-$breakpoint-mobile: 768px;
-
-@mixin formTitle {
-  text-align: center;
-  margin-bottom: 1rem;
-  color: #333;
-  font-size: 24px;
-  font-weight: 600;
-}
-
-@mixin inputBase {
-  width: 100%;
-  padding: 12px 14px;
-  border: 2px solid $border-color;
-  border-radius: 8px;
-  font-size: 14px;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  box-sizing: border-box;
-
-  &:focus {
-    outline: none;
-    border-color: $primary-color;
-    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-  }
-
-  &:disabled {
-    background: #f5f5f5;
-    cursor: not-allowed;
-    opacity: 0.8;
-  }
-}
-
+// === Основной контейнер - на всю высоту экрана ===
 .container {
-  max-width: 1100px;
-  margin: 24px auto;
-  padding: 20px;
-  background: $bg-tertiary;
-  min-height: calc(100vh - 50px);
-}
-
-.form {
-  background: $bg-primary;
-  padding: 30px;
-  border-radius: $border-radius;
-  box-shadow: $shadow-lg;
+  min-height: 100vh;              // 🔥 Занимает всю высоту экрана
   width: 100%;
-  max-width: 980px;
-  margin: 0 auto;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%); // 🔥 Серый градиент на весь экран
+  padding: 2rem 1rem;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;        // 🔥 Форма прижата к верху, но с отступом
 }
 
+// === Форма акта - белая карточка с тенью ===
+.form {
+  background: white;
+  border-radius: 16px;
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 900px;               // 🔥 Ограничиваем ширину формы
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+  margin: 1rem auto;              // 🔥 Центрируем форму
+  
+  @media (max-width: 768px) {
+    padding: 1.5rem;
+    margin: 0.5rem;
+  }
+}
+
+// === Заголовок ===
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 24px;
-  gap: 12px;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 2px solid #f1f5f9;
   flex-wrap: wrap;
+  gap: 1rem;
+
+  @media (max-width: 600px) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 .title {
-  @include formTitle;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1e293b;
   margin: 0;
 }
 
 .requestDate {
-  color: $text-secondary;
-  font-size: 14px;
+  font-size: 0.95rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
   font-weight: 500;
 }
 
+// === Секции ===
 .section {
-  background: $bg-secondary;
-  border: 1px solid $border-color;
-  border-radius: 10px;
-  padding: 18px;
-  margin-bottom: 20px;
+  margin-bottom: 2.5rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #e2e8f0;
+
+  &:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
 }
 
 .sectionTitle {
-  font-size: 18px;
-  color: $text-primary;
-  font-weight: 700;
-  margin-bottom: 12px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 1.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  .hint {
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: #64748b;
+    margin-left: 0.5rem;
+  }
 }
 
+// === Сетка информации ===
 .infoGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 14px;
+  gap: 1.25rem;
+  background: #f8fafc;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
 .infoItem {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  span, p {
+    font-size: 1rem;
+    color: #1e293b;
+    font-weight: 500;
+  }
+
+  .description {
+    background: white;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    margin: 0;
+    white-space: pre-wrap;
+    font-size: 0.95rem;
+    color: #475569;
+  }
 }
 
-.infoItem label {
-  color: $text-secondary;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.infoItem span,
-.description {
-  color: $text-primary;
-  font-size: 14px;
-}
-
-.description {
-  margin: 0;
-}
-
+// === Поля формы ===
 .field {
-  margin-bottom: 16px;
+  margin-bottom: 1.5rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
 }
 
 .label {
   display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #4a5568;
-  font-size: 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.5rem;
+
+  .required {
+    color: #ef4444;
+    margin-left: 2px;
+  }
 }
 
 .input,
-.select,
 .textarea {
-  @include inputBase;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  background: white;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+
+  &:disabled {
+    background: #f8fafc;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
 }
 
 .textarea {
-  min-height: 110px;
   resize: vertical;
-}
-
-.inputError {
-  border-color: $danger-color;
-}
-
-.errorMessage {
-  color: $danger-color;
-  font-size: 13px;
-  margin-top: 6px;
-  animation: fadeIn 0.2s ease-in;
+  min-height: 100px;
+  line-height: 1.5;
 }
 
 .charCount {
-  font-size: 12px;
-  color: $text-muted;
-  margin-top: 4px;
+  display: block;
   text-align: right;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-top: 0.35rem;
 }
 
+.inputError {
+  border-color: #ef4444 !important;
+
+  &:focus {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+  }
+}
+
+.errorMessage {
+  display: block;
+  color: #ef4444;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-top: 0.35rem;
+}
+
+// === Поиск и добавление работ ===
+.workSearch {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 600px) {
+    flex-direction: column;
+  }
+}
+
+.workSearchInput {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 1rem;
+  transition: all 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+}
+
+.addWorkBtn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  }
+
+  &:disabled {
+    background: #cbd5e1;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+// === Список работ ===
+.workList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.workItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  border-left: 4px solid #3b82f6;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #f1f5f9;
+  }
+}
+
+.workInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.workName {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 1.05rem;
+}
+
+.workDescription {
+  font-size: 0.9rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.workMeta {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.workTime {
+  color: #64748b;
+}
+
+.workCost {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+// === ЗИП внутри работы ===
+.workSpares {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.spareLabel {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.spareTag {
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.removeWorkBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fecaca;
+  color: #dc2626;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+
+  &:hover:not(:disabled) {
+    background: #fca5a5;
+    transform: scale(1.1);
+  }
+
+  &:disabled {
+    background: #e5e7eb;
+    color: #9ca3af;
+    cursor: not-allowed;
+  }
+}
+
+// === Кнопки действий ===
 .actions {
   display: flex;
+  gap: 1rem;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 10px;
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+  border-top: 2px solid #f1f5f9;
   flex-wrap: wrap;
+
+  @media (max-width: 600px) {
+    flex-direction: column-reverse;
+  }
 }
 
 .cancelBtn,
-.submitBtn,
-.addWorkBtn,
-.addSpareBtn {
-  padding: 12px 20px;
+.submitBtn {
+  padding: 0.875rem 2rem;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 10px;
   font-weight: 600;
+  font-size: 1rem;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.2s;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
 }
 
 .cancelBtn {
-  background: #e2e8f0;
-  color: #2d3748;
-}
+  background: #f1f5f9;
+  color: #475569;
+  border: 2px solid #e2e8f0;
 
-.cancelBtn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(66, 66, 66, 0.15);
+  &:hover:not(:disabled) {
+    background: #e2e8f0;
+    border-color: #cbd5e1;
+  }
 }
 
 .submitBtn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);;
   color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  }
 }
 
-.submitBtn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-}
-
-.cancelBtn:disabled,
-.submitBtn:disabled,
-.addWorkBtn:disabled,
-.addSpareBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
+// === Загрузка ===
 .loading {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
+  gap: 0.5rem;
 }
 
 .spinner {
@@ -239,311 +444,97 @@ $breakpoint-mobile: 768px;
   to { transform: rotate(360deg); }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.required {
-  color: #d32f2f;
-  margin-left: 2px;
-}
-
-// === Поиск и добавление работ ===
-.workSearch {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-  
-  @media (max-width: $breakpoint-mobile) {
-    flex-direction: column;
-  }
-}
-
-.spareSearch {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px; // добавил расстояние между полем и списком ЗИП
-  
-  @media (max-width: $breakpoint-mobile) {
-    flex-direction: column;
-  }
-}
-
-.workSearchInput,
-.spareSearchInput {
-  flex: 1;
-  @include inputBase;
-}
-
-.addWorkBtn,
-.addSpareBtn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  white-space: nowrap;
-}
-
-.addWorkBtn:hover:not(:disabled),
-.addSpareBtn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-}
-
-.workList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 15px;
-}
-
-.workItem {
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  background: $bg-secondary;
-  border-radius: 8px;
-  border: 1px solid $border-color;
-  margin-bottom: 12px;
-}
-
-.workHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-}
-
-.workInfo {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.workName {
-  font-weight: 600;
-  color: $text-primary;
-  font-size: 15px;
-}
-
-.workDescription {
-  font-size: 13px;
-  color: $text-secondary;
-  font-style: italic;
-}
-
-.workMeta {
-  font-size: 13px;
-  color: $text-muted;
-  font-weight: 500;
-  margin-top: 4px;
-}
-
-.workSpares {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid $border-color;
-}
-
-.spareLabel {
-  font-weight: 600;
-  color: $text-primary;
-  font-size: 14px;
-  margin-bottom: 8px;
-  display: block;
-}
-
-.spareTags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.spareTag {
-  background: $primary-color;
-  color: white;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.removeWorkBtn,
-.removeSpareBtn {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: rgba(245, 101, 101, 0.1);
-  color: $danger-color;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: $transition;
-  flex-shrink: 0;
-  
-  &:hover:not(:disabled) {
-    background: $danger-color;
-    color: white;
-  }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.spareList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.spareItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  background: $bg-secondary;
-  border: 1px solid $border-color;
-  border-radius: 8px;
-}
-
-.spareName {
-  font-size: 14px;
-  color: $text-primary;
-  font-weight: 600;
-  flex: 1;
-}
-
-.spareControls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.quantityBtn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: 1px solid $border-color;
-  background: white;
-  cursor: pointer;
-  color: $text-primary;
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-}
-
-.quantity {
-  min-width: 70px;
-  text-align: center;
-  font-size: 14px;
-  color: $text-secondary;
-}
-
-.signatures {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
-}
-
-.signature {
-  background: $bg-primary;
-  border: 1px solid $border-color;
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.signatureLine {
-  display: flex;
-  justify-content: space-between;
-  font-size: 14px;
-  color: $text-primary;
-  margin-bottom: 6px;
-}
-
-.signatureValue {
-  font-weight: 600;
-}
-
-.signatureHint {
-  font-size: 12px;
-  color: $text-muted;
-}
-
-/* В DiagnosticActForm.module.scss */
-.dataLoading {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  color: #666;
-  font-size: 0.9rem;
-  
-  .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid #f3f3f3;
-    border-top: 2px solid #667eea;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* 🔥 Модальное окно для выбора ЗИП */
+// === Модальное окно ===
 .modal {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(4px);
+  padding: 1rem;
 }
 
 .modalContent {
-  background: $bg-primary;
-  border-radius: $border-radius;
-  padding: 24px;
+  background: white;
+  padding: 2rem;
+  border-radius: 16px;
+  width: 100%;
   max-width: 600px;
-  width: 90%;
-  max-height: 80vh;
+  max-height: 90vh;
   overflow-y: auto;
-  box-shadow: $shadow-lg;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
 .modalTitle {
-  font-size: 18px;
+  font-size: 1.35rem;
   font-weight: 600;
-  color: $text-primary;
-  margin-bottom: 16px;
-  text-align: center;
+  color: #1e293b;
+  margin: 0 0 1.5rem 0;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #f1f5f9;
 }
 
+// === Поиск ЗИП в модалке ===
 .spareSelector {
-  margin-bottom: 16px;
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 
+.spareSearchInput {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 1rem;
+  transition: all 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+}
+
+.addSpareBtn {
+  padding: 0.75rem 1.25rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    background: #2563eb;
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    background: #cbd5e1;
+    cursor: not-allowed;
+  }
+}
+
+// === Выбранные ЗИП ===
 .selectedSpares {
-  margin-bottom: 20px;
+  margin-bottom: 1.5rem;
 
   h4 {
-    font-size: 16px;
+    margin: 0 0 0.75rem 0;
+    font-size: 1rem;
+    color: #334155;
     font-weight: 600;
-    color: $text-primary;
-    margin-bottom: 12px;
   }
 }
 
@@ -551,399 +542,146 @@ $breakpoint-mobile: 768px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
-  background: $bg-secondary;
-  border-radius: 6px;
-  margin-bottom: 8px;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  border: 1px solid #e2e8f0;
 
-  .spareName {
-    font-weight: 500;
-    color: $text-primary;
-  }
-
-  .spareControls {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  &:last-child {
+    margin-bottom: 0;
   }
 }
 
-.modalActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.confirmBtn {
-  background: $primary-color;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
+.spareName {
   font-weight: 500;
+  color: #1e293b;
+  flex: 1;
+}
+
+.spareControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.quantityBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #e2e8f0;
+  color: #475569;
+  border: none;
+  font-size: 1.1rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: $transition;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
   &:hover:not(:disabled) {
-    background: $primary-dark;
+    background: #cbd5e1;
   }
 
   &:disabled {
-    background: #ccc;
+    opacity: 0.5;
     cursor: not-allowed;
   }
 }
 
-// Добавьте в конец файла:
-
-/* 🔥 Стили для оптимизации закупок */
-.procurementActions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.quantity {
+  min-width: 50px;
+  text-align: center;
+  font-weight: 600;
+  color: #1e293b;
 }
 
-.optimizeBtn {
-  padding: 0.75rem 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+.removeSpareBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fecaca;
+  color: #dc2626;
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 1rem;
+  font-size: 0.9rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  transition: transform 0.2s, box-shadow 0.2s;
-  
+  transition: all 0.2s;
+  margin-left: 0.5rem;
+
+  &:hover {
+    background: #fca5a5;
+    transform: scale(1.1);
+  }
+}
+
+// === Кнопки модалки ===
+.modalActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding-top: 1.5rem;
+  border-top: 2px solid #f1f5f9;
+  flex-wrap: wrap;
+}
+
+.modalActions .cancelBtn {
+  min-width: auto;
+  padding: 0.75rem 1.5rem;
+}
+
+.modalActions .confirmBtn {
+  min-width: auto;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+  color: white;
+
   &:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-  }
-  
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-  }
-  
-  &.loading {
-    .spinner {
-      animation: spin 1s linear infinite;
-    }
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
   }
 }
 
-.spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top: 2px solid white;
-  border-radius: 50%;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.hint {
-  font-size: 0.9rem;
-  color: #666;
-  margin: 0;
-}
-
-/* Результаты оптимизации */
-.procurementHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.closeBtn {
-  padding: 0.4rem 0.8rem;
-  background: #e9ecef;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 1.2rem;
-  
-  &:hover {
-    background: #dee2e6;
-  }
-}
-
-.procurementMessage {
-  padding: 1rem;
-  border-radius: 8px;
-  margin-bottom: 1rem;
-  font-weight: 500;
-  
-  &.success {
-    background: #d4edda;
-    color: #155724;
-    border-left: 4px solid #28a745;
-  }
-  
-  &.warning {
-    background: #fff3cd;
-    color: #856404;
-    border-left: 4px solid #ffc107;
-  }
-}
-
-.totalCost {
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-  font-size: 1.1rem;
-  
-  .cost {
-    font-weight: 700;
-    color: #28a745;
-    font-size: 1.3rem;
-  }
-}
-
-.unmetDemands {
-  padding: 1rem;
-  background: #f8d7da;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-  color: #721c24;
-  
-  h4 {
-    margin: 0 0 0.5rem 0;
-  }
-  
-  ul {
-    margin: 0;
-    padding-left: 1.5rem;
-  }
-}
-
-.subTitle {
-  font-size: 1.1rem;
-  color: #333;
-  margin: 1.5rem 0 1rem 0;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e9ecef;
-}
-
-/* Таблица закупок */
-.procurementTable {
-  overflow-x: auto;
-  
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    
-    th, td {
-      padding: 0.75rem;
-      text-align: left;
-      border-bottom: 1px solid #e9ecef;
-      vertical-align: top;
-    }
-    
-    th {
-      background: #f8f9fa;
-      font-weight: 600;
-      color: #495057;
-    }
-    
-    .shortage {
-      display: block;
-      font-size: 0.85rem;
-      color: #dc3545;
-      margin-top: 0.25rem;
-    }
-    
-    .allocation {
-      padding: 0.25rem 0;
-      border-bottom: 1px dashed #e9ecef;
-      
-      &:last-child {
-        border-bottom: none;
-      }
-    }
-    
-    .supplierName {
-      display: block;
-      font-weight: 600;
-      color: #333;
-    }
-    
-    .allocationDetails {
-      display: block;
-      font-size: 0.9rem;
-      color: #666;
-    }
-    
-    .delivery {
-      display: inline-block;
-      margin-left: 0.5rem;
-      font-size: 0.85rem;
-      color: #6c757d;
-    }
-  }
-}
-
-/* Сводка по поставщикам */
-.supplierSummary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
-}
-
-.supplierCard {
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border-left: 4px solid #667eea;
-  
-  h4 {
-    margin: 0 0 0.75rem 0;
-    color: #333;
-  }
-  
-  .supplierStats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-    
-    span {
-      background: white;
-      padding: 0.25rem 0.5rem;
-      border-radius: 4px;
-      border: 1px solid #e9ecef;
-    }
-  }
-}
-
-/* Карточки работ */
-.worksList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.workCard {
-  padding: 1rem;
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  background: #fff;
-  
-  &:hover {
-    border-color: #3498db;
-    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.1);
-  }
-}
-
-.workHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-.workName {
-  font-weight: 600;
-  color: #333;
-}
-
-.workCost {
-  font-weight: 600;
-  color: #28a745;
-}
-
-.workDesc {
-  color: #666;
-  font-size: 0.95rem;
-  margin: 0 0 0.5rem 0;
-}
-
-.workSpares {
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px dashed #e9ecef;
-}
-
-.spareLabel {
-  display: block;
-  font-size: 0.85rem;
-  color: #666;
-  margin-bottom: 0.25rem;
-}
-
-.spareTags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.spareTag {
-  background: #e7f3ff;
-  color: #0066cc;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
-
-/* Утилиты */
-.textBlock {
-  background: #f8f9fa;
-  padding: 1rem;
-  border-radius: 6px;
-  margin: 0;
-  white-space: pre-wrap;
-}
-
-.cost {
-  font-weight: 600;
-  color: #28a745;
-}
-
-/* Статусы */
-.statusBadge {
-  display: inline-block;
-  padding: 0.4rem 1rem;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.statusDraft { background: #e2e3e5; color: #383d41; }
-.statusSubmitted { background: #cce5ff; color: #004085; }
-.statusSent { background: #d1ecf1; color: #0c5460; }
-.statusApproved { background: #d4edda; color: #155724; }
-.statusRejected { background: #f8d7da; color: #721c24; }
-.statusCompleted { background: #d1e7dd; color: #0f5132; }
-
-/* Адаптив */
+// === Адаптивность ===
 @media (max-width: 768px) {
+  .container {
+    padding: 1rem 0.5rem;
+  }
+
+  .form {
+    padding: 1.5rem;
+    margin: 0.5rem;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
   .infoGrid {
     grid-template-columns: 1fr;
+    gap: 1rem;
   }
-  
-  .actionButtons {
+
+  .actions {
     flex-direction: column;
   }
-  
-  .supplierSummary {
-    grid-template-columns: 1fr;
+
+  .cancelBtn,
+  .submitBtn {
+    width: 100%;
   }
-  
-  .procurementTable table {
-    font-size: 0.9rem;
-    
-    th, td {
-      padding: 0.5rem;
-    }
+
+  .workItem {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .removeWorkBtn {
+    align-self: flex-end;
   }
 }

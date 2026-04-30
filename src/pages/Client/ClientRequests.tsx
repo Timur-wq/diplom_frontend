@@ -70,14 +70,16 @@ const ClientRequests: React.FC = () => {
   const [taskActs, setTaskActs] = useState<Record<number, TaskActs>>({});
 
   // Функция загрузки статуса
-  const loadActSignatureStatus = async (actId: number) => {
+  // Функция загрузки статуса
+  const loadActSignatureStatus = async (requestId: number) => {  // ← requestId, а не actId!
     try {
       const response = await authService.fetchWithAuth(
-        `https://localhost:7053/api/AdminRequest/${actId}/acts/signature-status`
+        `https://localhost:7053/api/AdminRequest/${requestId}/acts/signature-status`  // ← requestId!
       );
       if (response.ok) {
         const status: ActSignatureStatus = await response.json();
-        setActSignatureStatus(prev => ({ ...prev, [actId]: status }));
+        // 🔥 Сохраняем по requestId, а не по actId!
+        setActSignatureStatus(prev => ({ ...prev, [requestId]: status }));
       }
     } catch (error) {
       console.error('Ошибка загрузки статуса подписи:', error);
@@ -593,12 +595,11 @@ const ClientRequests: React.FC = () => {
     loadRequests();
   }, [loadRequests]);
   useEffect(() => {
-    if (expandedId && taskActs[expandedId]?.actId) {
-      const actId = taskActs[expandedId].actId;
-      console.log('📝 [useEffect] Загрузка статуса для actId:', actId);
-      loadActSignatureStatus(actId);
+    if (expandedId) {  // expandedId — это requestId!
+      console.log('📝 [useEffect] Загрузка статуса для requestId:', expandedId);
+      loadActSignatureStatus(expandedId);  // ✅ ПРАВИЛЬНО: передаём requestId (9)
     }
-  }, [taskActs, expandedId]);
+  }, [expandedId]);
 
   const filteredRequests = useMemo(() => {
     return requests.filter(request => {
@@ -1323,10 +1324,9 @@ const ClientRequests: React.FC = () => {
                                             <span className={styles.signatureTitle}>Ваша подпись</span>
                                           </div>
 
-                                          {/* 🔥 ИСПРАВЛЕНО: используем actId из taskActs */}
+                                          {/* 🔥 ИСПРАВЛЕНО: используем requestId для получения статуса */}
                                           {(() => {
-                                            const actId = taskActs[request.id]?.actId;
-                                            const signatureStatus = actId ? actSignatureStatus[actId] : null;
+                                            const signatureStatus = actSignatureStatus[request.id];  // ← request.id, а не actId!
 
                                             return signatureStatus?.isSignedByClient ? (
                                               <div className={styles.signedBadge}>
@@ -1348,16 +1348,16 @@ const ClientRequests: React.FC = () => {
                                         </div>
 
                                         {/* Подпись диспетчера */}
+                                        {/* Подпись диспетчера */}
                                         <div className={styles.signatureCard}>
                                           <div className={styles.signatureHeader}>
                                             <span className={styles.signatureIcon}>🏢</span>
                                             <span className={styles.signatureTitle}>Подпись сервисного центра</span>
                                           </div>
 
-                                          {/* 🔥 ИСПРАВЛЕНО: используем actId из taskActs */}
+                                          {/* 🔥 ИСПРАВЛЕНО: используем requestId */}
                                           {(() => {
-                                            const actId = taskActs[request.id]?.actId;
-                                            const signatureStatus = actId ? actSignatureStatus[actId] : null;
+                                            const signatureStatus = actSignatureStatus[request.id];  // ← request.id!
 
                                             return signatureStatus?.isSignedByDispatcher ? (
                                               <div className={styles.signedBadge}>
@@ -1374,9 +1374,9 @@ const ClientRequests: React.FC = () => {
                                       </div>
 
                                       {/* Общий статус */}
+                                      {/* Общий статус */}
                                       {(() => {
-                                        const actId = taskActs[request.id]?.actId;
-                                        const signatureStatus = actId ? actSignatureStatus[actId] : null;
+                                        const signatureStatus = actSignatureStatus[request.id];  // ← request.id!
 
                                         return signatureStatus?.isFullySigned && (
                                           <div className={styles.fullySigned}>
