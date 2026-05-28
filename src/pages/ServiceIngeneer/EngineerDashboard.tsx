@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { engineerTaskService } from '../../services/engineerTaskService';
 import { EngineerTask, EngineerStats, TaskStatus, TaskFilter } from './types';
@@ -17,10 +16,20 @@ const EngineerDashboard: React.FC = () => {
   const [processingTaskId, setProcessingTaskId] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
+  
+  // 🔥 Хук для навигации
   const navigate = useNavigate();
   const location = useLocation();
 
-
+  // 🔥 Функция выхода из системы
+  const handleLogout = () => {
+    // Очищаем токен из localStorage (или sessionStorage, в зависимости от вашей реализации authService)
+    localStorage.removeItem('token');
+    sessionStorage.clear(); // На всякий случай очистим сессию
+    
+    // Перенаправляем на страницу логина
+    navigate('/login', { replace: true });
+  };
 
   // Загрузка данных
   const loadData = useCallback(async () => {
@@ -204,6 +213,15 @@ const EngineerDashboard: React.FC = () => {
 
   return (
     <div className={styles.container}>
+      {/* 🔥 Добавлена кнопка выхода */}
+      <button 
+        className={styles.logoutBtn} 
+        onClick={handleLogout}
+        style={{ marginBottom: '20px', padding: '8px 16px', cursor: 'pointer', backgroundColor: '#ff4d4f', color: 'white', border: 'none', borderRadius: '4px', fontWeight: '600', fontSize: '1rem' }}
+      >
+        🚪 Выйти
+      </button>
+
       <h1 className={styles.title}>Личный кабинет сервисного инженера</h1>
 
       {/* Статистика */}
@@ -279,7 +297,7 @@ const EngineerDashboard: React.FC = () => {
                     Заявка #{requestId}
                   </h3>
                   <div className={styles.requestInfo}>
-                    <span>{requestTasks[0]?.clientFio?.trim() || 'Иванов Иван Иванович'}</span>
+                    <span>{requestTasks[0]?.clientFio}</span>
                     <span>{requestTasks[0]?.svtType} {requestTasks[0]?.model}</span>
                   </div>
                   <div className={styles.tasksCount}>

@@ -447,12 +447,10 @@ const ClientDiagnosticActView: React.FC = () => {
           </div>
         </section>
       )}
-
       {/* 🔥 Итоговая стоимость */}
       {normalizedStatus === 'SentToClient' && (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>💰 Стоимость работ и запчастей</h2>
-
           <div className={styles.costSummary}>
             {/* Стоимость работ */}
             {act.works.filter(w => approvedWorks.find(aw => aw.recordId === w.recordId)?.isApproved).length > 0 && (
@@ -466,7 +464,6 @@ const ClientDiagnosticActView: React.FC = () => {
                 </span>
               </div>
             )}
-
             {/* Стоимость ЗИП в работах */}
             {act.works
               .filter(w => approvedWorks.find(aw => aw.recordId === w.recordId)?.isApproved)
@@ -485,7 +482,6 @@ const ClientDiagnosticActView: React.FC = () => {
                   </span>
                 </div>
               )}
-
             {/* Стоимость общих ЗИП */}
             {additionalSpares.filter(s => approvedSpares.find(as => as.recordId === s.recordId)?.isApproved).length > 0 && (
               <div className={styles.costItem}>
@@ -498,7 +494,6 @@ const ClientDiagnosticActView: React.FC = () => {
                 </span>
               </div>
             )}
-
             {/* 🔥 ИТОГО */}
             <div className={styles.costTotal}>
               <span><strong>Итого к оплате:</strong></span>
@@ -549,7 +544,6 @@ const ClientDiagnosticActView: React.FC = () => {
           )}
         </section>
       )}
-
       {/* Кнопка отправки решения */}
       {normalizedStatus === 'SentToClient' && (
         <div className={styles.actions}>

@@ -135,3 +135,20 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+.logoutBtn {
+  background-color: #ff4d4f; // Красный цвет для выхода
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: background-color 0.3s;
+
+  &:hover {
+    background-color: #ff7875;
+  }
+
+  &:active {
+    background-color: #d9363e;
+  }
+}

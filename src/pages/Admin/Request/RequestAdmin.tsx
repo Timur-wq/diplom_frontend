@@ -25,6 +25,11 @@ interface FinalizationStatus {
   isFullySigned?: boolean;
 }
 
+const PLACEHOLDER_NAMES = [
+  "Иванов И.И.",
+  "Петров П.П.",
+  "Александров А.А."
+];
 
 interface TaskActs {
   repairActPath?: string;
@@ -116,6 +121,61 @@ const RequestsAdmin: React.FC = () => {
   const [generatingReport, setGeneratingReport] = useState<Record<number, boolean>>({});
   const [reportCodes, setReportCodes] = useState<Record<number, number>>({});
 
+  const handleNavigateToProcurement = async (requestId: number) => {
+    try {
+      // 🔥 Пытаемся получить actCode по requestId
+      // Если эндпоинт ещё не готов — используем requestId как заглушку
+      const response = await authService.fetchWithAuth(
+        `https://localhost:7053/api/dispatcher/DiagnosticAct/by-request/${requestId}`
+      );
+
+      let actCode: string | number = requestId; // fallback
+
+      if (response.ok) {
+        const act = await response.json();
+        actCode = act.actCode || requestId;
+      }
+
+      // Переход на страницу оптимизации
+      navigate(`/dispatcher/procurement/${actCode}`);
+    } catch (error) {
+      console.error('Ошибка перехода к оптимизации:', error);
+      // Fallback: переход с requestId
+      navigate(`/dispatcher/procurement/${requestId}`);
+    }
+  };
+
+  // 🔥 Функция для форматирования ФИО в "Фамилия И.О."
+  // 🔥 Обновленная функция форматирования
+  const formatNameToInitials = (fullName: string, index?: number): string => {
+    // Если имя передано и оно не пустое, форматируем его
+    if (fullName && fullName.trim().length > 0) {
+      const parts = fullName.trim().split(/\s+/);
+      if (parts.length === 0) return fullName;
+
+      const lastName = parts[0];
+      let initials = '';
+
+      if (parts.length > 1 && parts[1]) {
+        initials += parts[1][0] + '.';
+      }
+
+      if (parts.length > 2 && parts[2]) {
+        initials += parts[2][0] + '.';
+      }
+
+      return `${lastName} ${initials}`.trim();
+    }
+
+    // Если имя пустое, берем значение из массива по кругу на основе индекса
+    if (index !== undefined) {
+      return PLACEHOLDER_NAMES[index % PLACEHOLDER_NAMES.length];
+    }
+
+    // Если индекса нет (например, в других местах кода), возвращаем дефолтное
+    return PLACEHOLDER_NAMES[0];
+  };
+
 
 
   // Генерация отчёта для бухгалтерии
@@ -188,11 +248,35 @@ const RequestsAdmin: React.FC = () => {
     hasPendingOrders: boolean;
     pendingOrdersCount: number;
     pendingOrders: Array<{
+      spareCode: number;
       spareName: string;
-      quantity: number;
-      supplierName: string;
+      requiredAmount: number;
+      inStock: number;
+      shortage: number;
+      isSufficient: boolean;
     }>;
   } | null>(null);
+
+  const hasAnyShortage = useMemo(() => {
+    if (!spareStatus?.pendingOrders || spareStatus.pendingOrders.length === 0) {
+      console.log('📦 [hasAnyShortage] Нет заказов ЗИП, hasAnyShortage = false', {spareStatus});
+      return false;
+    }
+    const hasShortage = spareStatus.pendingOrders.some(order => order.shortage > 0);
+    console.log('📦 [hasAnyShortage] Найденные заказы:', spareStatus.pendingOrders);
+    console.log('📦 [hasAnyShortage] Есть дефицит (hasAnyShortage):', hasShortage);
+    return hasShortage;
+  }, [spareStatus]);
+
+  // 🔥 ОТСЛЕЖИВАНИЕ ИЗМЕНЕНИЯ spareStatus
+  useEffect(() => {
+    console.log('🔄 [spareStatus UPDATED]:', spareStatus);
+    if (spareStatus) {
+      console.log('   hasPendingOrders:', spareStatus.hasPendingOrders);
+      console.log('   pendingOrdersCount:', spareStatus.pendingOrdersCount);
+      console.log('   pendingOrders:', spareStatus.pendingOrders);
+    }
+  }, [spareStatus]);
 
   // Перегенерация договора с подписями
   const handleRegenerateContractWithSignatures = async (requestId: number) => {
@@ -526,16 +610,39 @@ const RequestsAdmin: React.FC = () => {
 
   const checkSpareStatus = async (requestId: number) => {
     try {
+      console.log('🔍 [checkSpareStatus] Загружаем статус ЗИП для requestId:', requestId);
       const response = await authService.fetchWithAuth(
         `https://localhost:7053/api/AdminRequest/request/${requestId}/spare-status`
       );
 
       if (response.ok) {
         const data = await response.json();
-        setSpareStatus(data);
+        console.log('✅ [checkSpareStatus] Получены RAW данные:', data);
+        console.log('✅ [checkSpareStatus] Тип данных:', typeof data, 'Является массивом:', Array.isArray(data));
+        
+        // 🔥 Проверяем, является ли ответ массивом или объектом
+        let formattedData;
+        if (Array.isArray(data)) {
+          console.log('⚙️ [checkSpareStatus] Данные - это МАССИВ, преобразуем в нужный формат');
+          formattedData = {
+            hasPendingOrders: data.length > 0,
+            pendingOrdersCount: data.length,
+            pendingOrders: data
+          };
+        } else {
+          console.log('⚙️ [checkSpareStatus] Данные - это ОБЪЕКТ');
+          formattedData = data;
+        }
+        
+        console.log('📊 [checkSpareStatus] Отформатированные данные:', formattedData);
+        console.log('📊 [checkSpareStatus] hasPendingOrders:', formattedData.hasPendingOrders);
+        console.log('📊 [checkSpareStatus] pendingOrders:', formattedData.pendingOrders);
+        setSpareStatus(formattedData);
+      } else {
+        console.log('⚠️ [checkSpareStatus] Не удалось загрузить статус ЗИП, status:', response.status);
       }
     } catch (error) {
-      console.error('Ошибка проверки статуса ЗИП:', error);
+      console.error('❌ [checkSpareStatus] Ошибка проверки статуса ЗИП:', error);
     }
   };
 
@@ -555,13 +662,12 @@ const RequestsAdmin: React.FC = () => {
 
       alert('✅ Заявки на ЗИП отправлены в ОМТС. Ожидайте поступления.');
       setSpareStatus(null);
-      loadRequests();  // ✅ Исправлено: было loadRequest
+      loadRequests();
     } catch (error: any) {
       alert(error.message || 'Ошибка при подтверждении заявок');
     }
   };
 
-  // 🔥 ИСПРАВЛЕНО: Добавлено поле receiptPath
   const [invoiceInfo, setInvoiceInfo] = useState<Record<number, {
     invoiceId?: number;
     generated: boolean;
@@ -573,7 +679,7 @@ const RequestsAdmin: React.FC = () => {
   } | null>>({});
 
 
-  // 🔥 НОВОЕ: Состояние для финального счёта на работы
+  //Состояние для финального счёта на работы
   const [finalInvoiceInfo, setFinalInvoiceInfo] = useState<Record<number, {
     invoiceId?: number;
     generated: boolean;
@@ -638,7 +744,7 @@ const RequestsAdmin: React.FC = () => {
           }));
         }
 
-        // 2. 🔥 ГЛАВНОЕ: Проверяем статус
+        // Проверяем статус
         // Если статус "Signed" — значит диспетчер тоже подписал!
         if (contract.status === "Signed") {
           console.log(`✅ [Договор #${requestId}] Статус: Signed — полностью подписан!`);
@@ -955,21 +1061,24 @@ const RequestsAdmin: React.FC = () => {
 
   const toggleExpand = (id: number) => {
     const isExpanding = expandedId !== id;
+    console.log('🔓 [toggleExpand] id:', id, 'isExpanding:', isExpanding);
     setExpandedId(isExpanding ? id : null);
     setSpareStatus(null);
 
     if (isExpanding) {
+      console.log('📂 [toggleExpand] Раскрываем карточку, загружаем данные...');
       checkDiagnosticAct(id).then(hasAct => {
         setDiagnosticActs(prev => ({ ...prev, [id]: hasAct }));
       });
       checkContractSigned(id);
       loadInvoiceInfo(id);  // Предоплата ЗИП
-      loadFinalInvoiceInfo(id);  // 🔥 НОВОЕ: Финальный счёт на работы
+      loadFinalInvoiceInfo(id);
+      console.log('🔄 [toggleExpand] Вызываем checkSpareStatus для id:', id);
+      checkSpareStatus(id);  // 🔥 Всегда загружаем информацию о ЗИП
 
       const request = allRequests.find(r => r.id === id);
 
       if (request?.status === RequestStatus.ApprovedByClient) {
-        checkSpareStatus(id);
         // 🔥 ДОБАВЬТЕ ЭТУ СТРОКУ:
         loadFinalizationStatus(id);
       }
@@ -1336,7 +1445,6 @@ const RequestsAdmin: React.FC = () => {
 
       alert('✅ Счёт на оплату работ сформирован!\nСумма: ' + result.amount?.toLocaleString('ru-RU') + ' ₽');
 
-      // 🔥 ИСПРАВЛЕНО: Обновляем finalInvoiceInfo, а не invoiceInfo
       setFinalInvoiceInfo(prev => ({
         ...prev,
         [requestId]: {
@@ -1361,9 +1469,7 @@ const RequestsAdmin: React.FC = () => {
   };
 
   // 🔥 Подтверждение оплаты диспетчером
-  // 🔥 Подтверждение оплаты диспетчером
   const handleConfirmFinalPayment = async (requestId: number) => {
-    // 🔥 ИСПРАВЛЕНО: Берём данные из finalInvoiceInfo
     const invoice = finalInvoiceInfo[requestId];
     if (!invoice?.invoiceId) {
       alert('Не удалось найти счёт');
@@ -1384,7 +1490,6 @@ const RequestsAdmin: React.FC = () => {
         throw new Error('Не удалось подтвердить оплату');
       }
 
-      // 🔥 ИСПРАВЛЕНО: Обновляем finalInvoiceInfo
       setFinalInvoiceInfo(prev => ({
         ...prev,
         [requestId]: prev[requestId] ? { ...prev[requestId]!, isPaid: true } : null
@@ -1576,7 +1681,7 @@ const RequestsAdmin: React.FC = () => {
               >
                 <div className={styles.requestInfo}>
                   <span className={styles.requestId}>#{request.id}</span>
-                  <span className={styles.requestClient}>{request.clientFio}</span>
+                  <span className={styles.requestClient}>{formatNameToInitials(request.clientFio)}</span>
                   <span className={styles.requestDevice}>{request.svtType} {request.model}</span>
 
                 </div>
@@ -1595,7 +1700,7 @@ const RequestsAdmin: React.FC = () => {
                   <div className={styles.detailsGrid}>
                     <div className={styles.detailItem}>
                       <label>Клиент:</label>
-                      <span>{request.clientFio}</span>
+                      <span>{formatNameToInitials(request.clientFio)}</span>
                     </div>
                     <div className={styles.detailItem}>
                       <label>Телефон:</label>
@@ -1700,6 +1805,22 @@ const RequestsAdmin: React.FC = () => {
                     </div>
                   )}
 
+
+                  {/* 🔥 КНОПКА ОПТИМИЗАЦИИ ЗАКУПОК — только после подтверждения предоплаты */}
+                  {signedContracts[request.id] === true &&
+                    contractFullySigned[request.id] &&
+                    invoiceInfo[request.id]?.isPaid && (
+                      <button
+                        className={styles.procurementBtn}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleNavigateToProcurement(request.id);
+                        }}
+                        title="Перейти к расчёту и формированию заявок на ЗИП"
+                      >
+                        📦 Оптимизация закупок ЗИП
+                      </button>
+                    )}
                   {/* 🔥 СЕКЦИЯ УПРАВЛЕНИЯ ДОГОВОРОМ */}
                   {/* 🔥 СЕКЦИЯ УПРАВЛЕНИЯ ДОГОВОРОМ */}
                   {diagnosticActs[request.id] && (
@@ -1923,49 +2044,90 @@ const RequestsAdmin: React.FC = () => {
                         </div>
                       )}
 
-                      {/* 🔥 КНОПКА "НАЗНАЧИТЬ НАРЯД" — ТОЛЬКО КОГДА ВСЁ ГОТОВО */}
+                      {/* 🔥 КНОПКА "НАЗНАЧИТЬ НАРЯД" — ТОЛЬКО КОГДА ВСЁ ГОТОВО И НЕТ ДЕФИЦИТА */}
                       {signedContracts[request.id] === true &&
                         contractFullySigned[request.id] &&
                         invoiceInfo[request.id]?.isPaid && (
                           <div className={styles.actionSection}>
-                            {spareStatus?.hasPendingOrders ? (
+                            {/* Проверяем наличие дефицита ЗИП */}
+                            {hasAnyShortage ? (
+                              <div className={styles.shortageAlert}>
+                                <h3>⚠️ Требуется оптимизация закупок:</h3>
+                                <ul>
+                                  {spareStatus?.pendingOrders
+                                    .filter(order => order.shortage > 0)
+                                    .map((order, idx) => (
+                                      <li key={idx}>
+                                        {order.spareName}: требуется {order.requiredAmount} шт.,
+                                        на складе {order.inStock} шт.,
+                                        дефицит {order.shortage} шт.
+                                      </li>
+                                    ))}
+                                </ul>
+                                <button
+                                  className={styles.procurementBtn}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleNavigateToProcurement(request.id);
+                                  }}
+                                >
+                                  📦 Оптимизация закупок ЗИП
+                                </button>
+                              </div>
+                            ) : spareStatus?.hasPendingOrders ? (
                               <div className={styles.pendingSparesAlert}>
                                 <h3>⚠️ Требуется закупка ЗИП:</h3>
                                 <ul>
                                   {spareStatus.pendingOrders.map((order, idx) => (
                                     <li key={idx}>
-                                      {order.spareName} × {order.quantity} шт. ({order.supplierName})
+                                      {order.spareName} × {order.requiredAmount} шт. 
                                     </li>
                                   ))}
                                 </ul>
-
-                                <button
-                                  className={styles.confirmOrdersBtn}
-                                  onClick={handleConfirmSpareOrders}
-                                >
-                                  📦 Отправить заявку на ЗИП в ОМТС
-                                </button>
-
                                 <p className={styles.hint}>
-                                  После поступления ЗИП на склад станет доступна кнопка "Назначить наряд"
+                                  Ожидается поступление ЗИП на склад
                                 </p>
                               </div>
-                            ) : (
-                              <button
-                                className={styles.assignWorkOrderBtn}
-                                onClick={() => handleCreateWorkOrder(request.id)}
-                                disabled={creatingWorkOrder[request.id]}
-                              >
-                                {creatingWorkOrder[request.id] ? (
-                                  <span className={styles.loading}>
-                                    <span className={styles.spinner}></span>
-                                    Назначение...
-                                  </span>
-                                ) : (
-                                  '🔧 Назначить наряд на ремонт'
-                                )}
-                              </button>
-                            )}
+                            ) : spareStatus === null ? (
+                              <div className={styles.optimizationRequired}>
+                                <p className={styles.hint}>
+                                  ⚠️ Сначала необходимо выполнить оптимизацию закупок ЗИП
+                                </p>
+                                <button
+                                  className={styles.procurementBtn}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleNavigateToProcurement(request.id);
+                                  }}
+                                >
+                                  📦 Перейти к оптимизации закупок
+                                </button>
+                              </div>
+                            ) : (() => {
+                              console.log(`[renderButton] requestId: ${request.id}, hasAnyShortage: ${hasAnyShortage}, spareStatus:`, spareStatus);
+                              if (!hasAnyShortage) {
+                                console.log(`[renderButton] requestId: ${request.id} - Показываем кнопку Назначить наряд`);
+                                return (
+                                  <button
+                                    className={styles.assignWorkOrderBtn}
+                                    onClick={() => handleCreateWorkOrder(request.id)}
+                                    disabled={creatingWorkOrder[request.id]}
+                                  >
+                                    {creatingWorkOrder[request.id] ? (
+                                      <span className={styles.loading}>
+                                        <span className={styles.spinner}></span>
+                                        Назначение...
+                                      </span>
+                                    ) : (
+                                      '🔧 Назначить наряд на ремонт'
+                                    )}
+                                  </button>
+                                );
+                              } else {
+                                console.log(`[renderButton] requestId: ${request.id} - Скрываем кнопку (hasAnyShortage = true)`);
+                                return null;
+                              }
+                            })()}
                           </div>
                         )}
                     </div>
@@ -2138,8 +2300,6 @@ const RequestsAdmin: React.FC = () => {
                           <span>💰 Оплата получена</span>
                         </label>
                       </div>
-
-                      {/* 🔥 СЕКЦИЯ ФИНАЛЬНОЙ ОПЛАТЫ (после завершения работ) */}
                       {/* 🔥 СЕКЦИЯ ФИНАЛЬНОЙ ОПЛАТЫ (после завершения работ) */}
                       {(request.status === RequestStatus.Completed || finalInvoiceInfo[request.id]?.generated) && (
                         <div className={styles.finalPaymentSection}>
@@ -2147,8 +2307,6 @@ const RequestsAdmin: React.FC = () => {
                           <p className={styles.sectionHint}>
                             ЗИП оплачен отдельно. Данный счёт — только за выполненные работы.
                           </p>
-
-                          {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo вместо invoiceInfo */}
                           {!finalInvoiceInfo[request.id]?.generated ? (
                             <button
                               className={styles.generateFinalInvoiceBtn}
@@ -2169,12 +2327,10 @@ const RequestsAdmin: React.FC = () => {
                               <div className={styles.invoiceRow}>
                                 <span>Сумма к оплате (работы):</span>
                                 <span className={styles.invoiceAmount}>
-                                  {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
                                   {finalInvoiceInfo[request.id]?.amount?.toLocaleString('ru-RU')} ₽
                                 </span>
                               </div>
 
-                              {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
                               {finalInvoiceInfo[request.id]?.filePath && (
                                 <a
                                   href={`https://localhost:7053/${finalInvoiceInfo[request.id]?.filePath}`}
@@ -2188,13 +2344,11 @@ const RequestsAdmin: React.FC = () => {
 
                               {/* Статус чека */}
                               <div className={styles.receiptStatus}>
-                                {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
                                 {finalInvoiceInfo[request.id]?.receiptUploaded ? (
                                   <>
                                     <span className={styles.receiptUploaded}>
                                       ✅ Чек загружен клиентом
                                     </span>
-                                    {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
                                     {finalInvoiceInfo[request.id]?.receiptPath && (
                                       <button
                                         onClick={(e) => {
@@ -2215,7 +2369,6 @@ const RequestsAdmin: React.FC = () => {
                               </div>
 
                               {/* Кнопка подтверждения оплаты */}
-                              {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
                               {!finalInvoiceInfo[request.id]?.isPaid && finalInvoiceInfo[request.id]?.receiptUploaded && (
                                 <button
                                   className={styles.confirmPaymentBtn}
@@ -2234,7 +2387,6 @@ const RequestsAdmin: React.FC = () => {
                               )}
 
                               {/* Оплата подтверждена */}
-                              {/* 🔥 ИСПРАВЛЕНО: finalInvoiceInfo */}
                               {finalInvoiceInfo[request.id]?.isPaid && (
                                 <div className={styles.paymentConfirmed}>
                                   ✅ Оплата работ подтверждена — заявка полностью завершена
@@ -2244,7 +2396,6 @@ const RequestsAdmin: React.FC = () => {
                           )}
                         </div>
                       )}
-
                       {/* Кнопка генерации гарантии */}
                       {(finalizationStatus[request.id]?.paymentReceived || finalInvoiceInfo[request.id]?.isPaid) &&
                         !finalizationStatus[request.id]?.warrantyExists && (
@@ -2286,8 +2437,7 @@ const RequestsAdmin: React.FC = () => {
                       )}
                     </div>
                   )}
-                  {/* 🔥 КНОПКА ГЕНЕРАЦИИ ОТЧЁТА ДЛЯ БУХГАЛТЕРИИ */}
-                  {/* 🔥 СЕКЦИЯ ОТЧЁТНОСТИ */}
+                  {/*СЕКЦИЯ ОТЧЁТНОСТИ */}
                   {request.status === RequestStatus.Completed && (
                     <div className={styles.reportSection}>
                       <h4 className={styles.sectionTitle}>📊 Отчётность</h4>
@@ -2455,17 +2605,7 @@ const RequestsAdmin: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* 🔥 Кнопка связи с инженером */}
-                  {allRequests.find(r => r.id === assignModal.requestId)?.assignedEngineerFio && (
-                    <button
-                      className={styles.contactEngineerBtn}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                      }}
-                    >
-                      📞 Связаться с инженером
-                    </button>
-                  )}
+
 
                   <div className={styles.modalWarning}>
                     {allRequests.find(r => r.id === assignModal.requestId)?.assignedEngineerFio

@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { authService } from '../../services/authService';
+import { useNavigate } from 'react-router-dom'; // 🔥 Добавлен импорт
 import styles from './GoodsRecieptPage.module.scss';
 
 interface PendingOrder {
   spareOrderId: number;
   orderedQuantity: number;
   spareName: string;
-  supplierName: string;
+  supplierName: string; // Это поле останется, но мы его не будем показывать напрямую
 }
 
 const GoodsReceiptPage: React.FC = () => {
@@ -19,10 +20,23 @@ const GoodsReceiptPage: React.FC = () => {
   const [goodQty, setGoodQty] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  
+  // 🔥 Хук для навигации
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadPendingOrders();
   }, []);
+
+  // 🔥 Функция выхода из системы
+  const handleLogout = () => {
+    // Очищаем токен из localStorage (или sessionStorage, в зависимости от вашей реализации authService)
+    localStorage.removeItem('token');
+    sessionStorage.clear(); // На всякий случай очистим сессию
+    
+    // Перенаправляем на страницу логина
+    navigate('/login', { replace: true });
+  };
 
   // 🔥 Загрузка заявок, ожидающих приёмки
   const loadPendingOrders = async () => {
@@ -99,12 +113,24 @@ const GoodsReceiptPage: React.FC = () => {
     }
   };
 
-  
+  // 🔥 ИЗМЕНЕНО: Функция для получения псевдонима поставщика в формате ООО "..."
+  const getSupplierAlias = (index: number): string => {
+    return `ООО "Поставщик ЗИП ${index + 1}"`;
+  };
 
   if (loading) return <div className={styles.loading}>Загрузка...</div>;
 
   return (
     <div className={styles.container}>
+      {/* 🔥 Добавлена кнопка выхода */}
+      <button 
+        className={styles.logoutBtn} 
+        onClick={handleLogout}
+        style={{ marginBottom: '20px', padding: '8px 16px', cursor: 'pointer', backgroundColor: '#ff4d4f', color: 'white', border: 'none', borderRadius: '4px', fontSize: '1rem', fontWeight: '600' }}
+      >
+        🚪 Выйти
+      </button>
+
       <h1 className={styles.title}>Приёмка ЗИП от поставщиков</h1>
 
       {pendingOrders.length === 0 ? (
@@ -121,11 +147,12 @@ const GoodsReceiptPage: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {pendingOrders.map(order => (
+            {pendingOrders.map((order, index) => (
               <tr key={order.spareOrderId}>
                 <td>#{order.spareOrderId}</td>
                 <td>{order.spareName}</td>
-                <td>{order.supplierName}</td>
+                {/* Используем псевдоним */}
+                <td>{getSupplierAlias(index)}</td>
                 <td>{order.orderedQuantity} шт.</td>
                 <td>
                   <button

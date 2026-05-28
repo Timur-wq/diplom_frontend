@@ -27,18 +27,18 @@ interface FormErrors {
   model?: string;
   serialNumber?: string;
   description?: string;
-  issueDate?: string;  // ✅ Добавлено
-  issueTime?: string;  // ✅ Добавлено
+  issueDate?: string;  
+  issueTime?: string;  
 }
 
 const RequestForm: React.FC = () => {
-  // ✅ Функция для получения текущей даты в формате YYYY-MM-DD
+  // Функция для получения текущей даты в формате YYYY-MM-DD
   const getCurrentDate = () => {
     const now = new Date();
     return now.toISOString().split('T')[0];
   };
 
-  // ✅ Функция для получения текущего времени в формате HH:mm:ss
+  // Функция для получения текущего времени в формате HH:mm:ss
   const getCurrentTime = () => {
     const now = new Date();
     return now.toTimeString().split(' ')[0];
@@ -50,8 +50,8 @@ const RequestForm: React.FC = () => {
     deviceType: '',
     model: '',
     serialNumber: '',
-    issueDate: getCurrentDate(),  // ✅ Автозаполнение
-    issueTime: getCurrentTime(),  // ✅ Автозаполнение
+    issueDate: getCurrentDate(), 
+    issueTime: getCurrentTime(),  
     description: '',
   });
 
@@ -69,7 +69,7 @@ const RequestForm: React.FC = () => {
 
   // Валидация отдельного поля
   const validateField = (name: keyof FormData, value: string): string | undefined => {
-    // ✅ Авто-поля не валидируем
+    // Авто-поля не валидируем
     if (name === 'issueDate' || name === 'issueTime') {
       return undefined;
     }
@@ -172,7 +172,7 @@ const RequestForm: React.FC = () => {
     });
   }, [formData]);
 
-  // ✅ Отправка формы с POST-запросом
+  // Отправка формы с POST-запросом
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -197,7 +197,7 @@ const RequestForm: React.FC = () => {
     if (Object.keys(newErrors).length > 0) return;
 
     try {
-      // ✅ Формируем данные для отправки (включая авто-дату/время)
+      // Формируем данные для отправки (включая авто-дату/время)
       const requestData = {
         fio: formData.fullName,
         phone: formData.phone.replace(/\D/g, ''), // только цифры
@@ -226,7 +226,7 @@ const RequestForm: React.FC = () => {
       
       alert(`✅ Заявка успешно отправлена! ID: ${requestId}`);
       
-      // ✅ Сброс формы с новыми авто-значениями
+      // Сброс формы с новыми авто-значениями
       setFormData({
         fullName: '',
         phone: '',

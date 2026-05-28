@@ -19,6 +19,8 @@ import ClientDiagnosticActView from './pages/Client/ClientDiagnosticActView';
 import GoodsReceiptPage from './pages/Omt/GoodsRecieptPage';
 import StaffManagement from './pages/Admin/StaffManagement';
 import Reports from './pages/Accountant/Reports';
+import SpecialistsLoadView from './pages/Admin/SpecialistsLoadView';
+import ProcurementOptimizationPage from './pages/Admin/ProcurementOptimizationPage';
 
 
 function App() {
@@ -50,14 +52,19 @@ function App() {
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="requests" element={<RequestsAdmin />} />
-          <Route path="staff" element={<StaffManagement />} />
+          <Route path="staff" element={<SpecialistsLoadView />} />
         </Route>
 
         <Route path="/dispatcher/acts/:requestId" element={
           <ProtectedRoute roles={[UserRole.Dispatcher]}>
             <DiagnosticActView />
+            
           </ProtectedRoute>
         } />
+        <Route 
+          path="/dispatcher/procurement/:actCode" 
+          element={<ProcurementOptimizationPage />} 
+        />
 
         <Route
           path="/omt/requests"
@@ -79,6 +86,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+
 
       </Routes>
     </BrowserRouter>

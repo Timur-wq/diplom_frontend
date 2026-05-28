@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authService } from '../../services/authService';
+import { useNavigate } from 'react-router-dom'; // 🔥 Добавлен импорт
 import styles from './Reports.module.scss';
 
 interface Report {
@@ -15,6 +16,8 @@ const Reports: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<Record<number, boolean>>({});
+  
+  const navigate = useNavigate(); // 🔥 Инициализация хука навигации
 
   useEffect(() => {
     loadReports();
@@ -65,11 +68,31 @@ const Reports: React.FC = () => {
     }
   };
 
+  // 🔥 Функция выхода из системы
+  const handleLogout = () => {
+    // 1. Очищаем токен/данные сессии (зависит от того, как реализован authService)
+    // Обычно это выглядит так:
+    localStorage.removeItem('token'); 
+    sessionStorage.clear(); // Если используете sessionStorage
+    
+    // 2. Перенаправляем на страницу входа
+    navigate('/login');
+  };
+
   if (loading) return <div className={styles.loading}>Загрузка отчётов...</div>;
   if (error) return <div className={styles.error}>Ошибка: {error}</div>;
 
   return (
     <div className={styles.container}>
+      {/* 🔥 Добавлена кнопка выхода */}
+      <button 
+        className={styles.logoutBtn} 
+        onClick={handleLogout}
+        style={{ marginBottom: '20px', padding: '8px 16px', cursor: 'pointer', fontWeight: '600', fontSize: '1rem' }}
+      >
+        🚪 Выйти
+      </button>
+
       <h1 className={styles.title}>📊 Отчёты для бухгалтерии</h1>
       
       {reports.length === 0 ? (

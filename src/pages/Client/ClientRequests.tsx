@@ -888,134 +888,129 @@ const ClientRequests: React.FC = () => {
                                       {submitting ? 'Загрузка...' : '📋 Просмотреть акт диагностики'}
                                     </button>
 
-                                    {/* 🔥 НОВАЯ КНОПКА: Просмотреть договор */}
-                                    <button
-                                      className={styles.viewContractBtn}  // ← Добавьте стиль ниже
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        try {
-                                          const response = await authService.fetchWithAuth(
-                                            `https://localhost:7053/api/client/contract/request/${request.id}`
-                                          );
-
-                                          if (!response.ok) {
-                                            throw new Error('Договор ещё не сформирован диспетчером');
-                                          }
-
-                                          const contract = await response.json();
-
-                                          if (contract.filePath) {
-                                            window.open(`https://localhost:7053/${contract.filePath}`, '_blank');
-                                          } else {
-                                            alert('Договор ещё не сформирован');
-                                          }
-                                        } catch (error: any) {
-                                          console.error('Ошибка просмотра договора:', error);
-                                          alert(error.message || 'Договор ещё не сформирован диспетчером');
-                                        }
-                                      }}
-                                      title="Просмотреть договор"
-                                    >
-                                      📄 Просмотреть договор
-                                    </button>
-                                    {/* 🔥 Секция подписания договора */}
-                                    {/* 🔥 Секция подписания договора */}
+                                    {/* 🔥 Секция договора — показываем ТОЛЬКО если договор существует */}
                                     {(() => {
-                                      const status = contractSignatureStatus[request.id];
+                                      const contractStatus = contractSignatureStatus[request.id];
+
+                                      // Показываем секцию только если договор уже создан (есть статус)
+                                      if (!contractStatus && request.status !== RequestStatus.Completed) {
+                                        return null;
+                                      }
 
                                       return (
                                         <>
-                                          {/* Если договор ещё не подписан клиентом */}
-                                          {!status?.isSignedByClient && (
-                                            <div className={styles.contractSignatureSection}>
-                                              <div className={styles.signatureInfo}>
-                                                <p className={styles.signatureText}>
-                                                  📝 Для начала работ необходимо подписать договор
-                                                </p>
-                                                <button
-                                                  className={styles.signContractBtn}
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleSignContract(request.id);
-                                                  }}
-                                                >
-                                                  ✍️ Подписать договор
-                                                </button>
-                                              </div>
-                                            </div>
-                                          )}
+                                          {/* 🔥 НОВАЯ КНОПКА: Просмотреть договор */}
+                                          <button
+                                            className={styles.viewContractBtn}
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              try {
+                                                const response = await authService.fetchWithAuth(
+                                                  `https://localhost:7053/api/client/contract/request/${request.id}`
+                                                );
 
-                                          {/* Если договор подписан клиентом, но НЕ подписан диспетчером */}
-                                          {status?.isSignedByClient && !status.isFullySigned && (
-                                            <div className={styles.contractPendingSection}>
-                                              <div className={styles.pendingInfo}>
-                                                <p className={styles.pendingText}>
-                                                  ✅ Вы подписали договор {status.clientSignedAt &&
-                                                    new Date(status.clientSignedAt).toLocaleString('ru-RU')
-                                                  }
-                                                </p>
-                                                <p className={styles.pendingHint}>
-                                                  ⏳ Ожидается подпись диспетчера...
-                                                </p>
-                                              </div>
-                                            </div>
-                                          )}
+                                                if (!response.ok) {
+                                                  throw new Error('Договор ещё не сформирован диспетчером');
+                                                }
 
-                                          {/* Если договор подписан обеими сторонами */}
-                                          {status?.isFullySigned && (
-                                            <div className={styles.contractFullySignedSection}>
-                                              <div className={styles.fullySignedInfo}>
-                                                <p className={styles.fullySignedText}>
-                                                  ✅ Договор полностью подписан обеими сторонами
-                                                </p>
+                                                const contract = await response.json();
 
-                                                {/* <div className={styles.signatureDetails}>
-                                                  <div className={styles.signatureDetail}>
-                                                    <strong>📝 Ваша подпись:</strong>
-                                                    <span>{status.clientSignedAt &&
-                                                      new Date(status.clientSignedAt).toLocaleString('ru-RU')
-                                                    }</span>
+                                                if (contract.filePath) {
+                                                  window.open(`https://localhost:7053/${contract.filePath}`, '_blank');
+                                                } else {
+                                                  alert('Договор ещё не сформирован');
+                                                }
+                                              } catch (error: any) {
+                                                console.error('Ошибка просмотра договора:', error);
+                                                alert(error.message || 'Договор ещё не сформирован диспетчером');
+                                              }
+                                            }}
+                                            title="Просмотреть договор"
+                                            disabled={!contractStatus}  // ← Блокируем, если договора нет
+                                          >
+                                            📄 Просмотреть договор
+                                          </button>
+
+                                          {/* 🔥 Секция подписания договора */}
+                                          {contractStatus && (
+                                            <>
+                                              {/* Если договор ещё не подписан клиентом */}
+                                              {!contractStatus.isSignedByClient && (
+                                                <div className={styles.contractSignatureSection}>
+                                                  <div className={styles.signatureInfo}>
+                                                    <p className={styles.signatureText}>
+                                                      📝 Для начала работ необходимо подписать договор
+                                                    </p>
+                                                    <button
+                                                      className={styles.signContractBtn}
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleSignContract(request.id);
+                                                      }}
+                                                    >
+                                                      ✍️ Подписать договор
+                                                    </button>
                                                   </div>
+                                                </div>
+                                              )}
 
-                                                  <div className={styles.signatureDetail}>
-                                                    <strong>🏢 Подпись диспетчера:</strong>
-                                                    <span>{status.dispatcherSignedAt &&
-                                                      new Date(status.dispatcherSignedAt).toLocaleString('ru-RU')
-                                                    }</span>
+                                              {/* Если договор подписан клиентом, но НЕ подписан диспетчером */}
+                                              {contractStatus.isSignedByClient && !contractStatus.isFullySigned && (
+                                                <div className={styles.contractPendingSection}>
+                                                  <div className={styles.pendingInfo}>
+                                                    <p className={styles.pendingText}>
+                                                      ✅ Вы подписали договор {contractStatus.clientSignedAt &&
+                                                        new Date(contractStatus.clientSignedAt).toLocaleString('ru-RU')
+                                                      }
+                                                    </p>
+                                                    <p className={styles.pendingHint}>
+                                                      ⏳ Ожидается подпись диспетчера...
+                                                    </p>
                                                   </div>
-                                                </div> */}
+                                                </div>
+                                              )}
 
-                                                {/* 🔥 Кнопка для скачивания договора с подписями */}
-                                                <button
-                                                  className={styles.downloadSignedContractBtn}
-                                                  onClick={async (e) => {
-                                                    e.stopPropagation();
-                                                    try {
-                                                      const response = await authService.fetchWithAuth(
-                                                        `https://localhost:7053/api/client/contract/request/${request.id}`
-                                                      );
+                                              {/* Если договор подписан обеими сторонами */}
+                                              {contractStatus.isFullySigned && (
+                                                <div className={styles.contractFullySignedSection}>
+                                                  <div className={styles.fullySignedInfo}>
+                                                    <p className={styles.fullySignedText}>
+                                                      ✅ Договор полностью подписан обеими сторонами
+                                                    </p>
 
-                                                      if (!response.ok) {
-                                                        throw new Error('Не удалось получить информацию о договоре');
-                                                      }
+                                                    {/* 🔥 Кнопка для скачивания договора с подписями */}
+                                                    <button
+                                                      className={styles.downloadSignedContractBtn}
+                                                      onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        try {
+                                                          const response = await authService.fetchWithAuth(
+                                                            `https://localhost:7053/api/client/contract/request/${request.id}`
+                                                          );
 
-                                                      const contract = await response.json();
+                                                          if (!response.ok) {
+                                                            throw new Error('Не удалось получить информацию о договоре');
+                                                          }
 
-                                                      if (contract.filePath) {
-                                                        window.open(`https://localhost:7053/${contract.filePath}`, '_blank');
-                                                      } else {
-                                                        alert('Договор с подписями ещё не сформирован');
-                                                      }
-                                                    } catch (error: any) {
-                                                      console.error('Ошибка скачивания договора:', error);
-                                                      alert(error.message || 'Не удалось скачать договор');
-                                                    }
-                                                  }}
-                                                >
-                                                  📥 Скачать договор с подписями (PDF)
-                                                </button>
-                                              </div>
-                                            </div>
+                                                          const contract = await response.json();
+
+                                                          if (contract.filePath) {
+                                                            window.open(`https://localhost:7053/${contract.filePath}`, '_blank');
+                                                          } else {
+                                                            alert('Договор с подписями ещё не сформирован');
+                                                          }
+                                                        } catch (error: any) {
+                                                          console.error('Ошибка скачивания договора:', error);
+                                                          alert(error.message || 'Не удалось скачать договор');
+                                                        }
+                                                      }}
+                                                    >
+                                                      📥 Скачать договор с подписями (PDF)
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </>
                                           )}
                                         </>
                                       );
