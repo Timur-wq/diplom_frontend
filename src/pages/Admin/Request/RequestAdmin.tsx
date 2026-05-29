@@ -255,6 +255,7 @@ const RequestsAdmin: React.FC = () => {
       shortage: number;
       isSufficient: boolean;
     }>;
+    procurementFormed?: boolean;
   } | null>(null);
 
   const hasAnyShortage = useMemo(() => {
@@ -627,11 +628,19 @@ const RequestsAdmin: React.FC = () => {
           formattedData = {
             hasPendingOrders: data.length > 0,
             pendingOrdersCount: data.length,
-            pendingOrders: data
+            pendingOrders: data,
+            procurementFormed: false
           };
         } else {
           console.log('⚙️ [checkSpareStatus] Данные - это ОБЪЕКТ');
-          formattedData = data;
+          formattedData = {
+            ...data,
+            procurementFormed:
+              data.procurementFormed ??
+              data.isProcurementCreated ??
+              data.hasProcurementOrders ??
+              false
+          };
         }
         
         console.log('📊 [checkSpareStatus] Отформатированные данные:', formattedData);
@@ -1807,7 +1816,7 @@ const RequestsAdmin: React.FC = () => {
 
 
                   {/* 🔥 КНОПКА ОПТИМИЗАЦИИ ЗАКУПОК — только после подтверждения предоплаты */}
-                  {signedContracts[request.id] === true &&
+                  {/* {signedContracts[request.id] === true &&
                     contractFullySigned[request.id] &&
                     invoiceInfo[request.id]?.isPaid && (
                       <button
@@ -1818,9 +1827,9 @@ const RequestsAdmin: React.FC = () => {
                         }}
                         title="Перейти к расчёту и формированию заявок на ЗИП"
                       >
-                        📦 Оптимизация закупок ЗИП
+                        📦 Сформировать ведомость закупок
                       </button>
-                    )}
+                    )} */}
                   {/* 🔥 СЕКЦИЯ УПРАВЛЕНИЯ ДОГОВОРОМ */}
                   {/* 🔥 СЕКЦИЯ УПРАВЛЕНИЯ ДОГОВОРОМ */}
                   {diagnosticActs[request.id] && (
@@ -2050,7 +2059,11 @@ const RequestsAdmin: React.FC = () => {
                         invoiceInfo[request.id]?.isPaid && (
                           <div className={styles.actionSection}>
                             {/* Проверяем наличие дефицита ЗИП */}
-                            {hasAnyShortage ? (
+                            {spareStatus?.procurementFormed ? (
+                              <div className={styles.procurementNotice}>
+                                ✅ Закупочная ведомость уже сформирована. Кнопка формирования закупок и список требуемых ЗИП не отображаются.
+                              </div>
+                            ) : hasAnyShortage ? (
                               <div className={styles.shortageAlert}>
                                 <h3>⚠️ Требуется оптимизация закупок:</h3>
                                 <ul>
@@ -2071,18 +2084,20 @@ const RequestsAdmin: React.FC = () => {
                                     handleNavigateToProcurement(request.id);
                                   }}
                                 >
-                                  📦 Оптимизация закупок ЗИП
+                                  📦 Сформировать ведомость закупок
                                 </button>
                               </div>
-                            ) : spareStatus?.hasPendingOrders ? (
+                            ) : spareStatus?.hasPendingOrders && spareStatus.pendingOrders.some(order => order.requiredAmount > 0) ? (
                               <div className={styles.pendingSparesAlert}>
                                 <h3>⚠️ Требуется закупка ЗИП:</h3>
                                 <ul>
-                                  {spareStatus.pendingOrders.map((order, idx) => (
-                                    <li key={idx}>
-                                      {order.spareName} × {order.requiredAmount} шт. 
-                                    </li>
-                                  ))}
+                                  {spareStatus.pendingOrders
+                                    .filter(order => order.requiredAmount > 0)
+                                    .map((order, idx) => (
+                                      <li key={idx}>
+                                        {order.spareName} × {order.requiredAmount} шт. 
+                                      </li>
+                                    ))}
                                 </ul>
                                 <p className={styles.hint}>
                                   Ожидается поступление ЗИП на склад
@@ -2105,7 +2120,23 @@ const RequestsAdmin: React.FC = () => {
                               </div>
                             ) : (() => {
                               console.log(`[renderButton] requestId: ${request.id}, hasAnyShortage: ${hasAnyShortage}, spareStatus:`, spareStatus);
-                              if (!hasAnyShortage) {
+                              
+                              // Проверяем, поступили ли все требуемые ЗИП на склад
+                              const hasZeroStockWithRequirement = spareStatus?.pendingOrders?.every(order =>
+                                order.inStock == 0
+                              ) ?? false;
+                              
+                              console.log(`[renderButton] requestId: ${request.id}, hasZeroStockWithRequirement:`, hasZeroStockWithRequirement);
+                              
+                              if (hasZeroStockWithRequirement) {
+                                // ЗИП ещё не поступил
+                                console.log(`[renderButton] requestId: ${request.id} - ЗИП ещё не поступил на склад`);
+                                return (
+                                  <div className={styles.waitingForZipNotice}>
+                                    <p>⏳ Ожидание поступления ЗИП на склад...</p>
+                                  </div>
+                                );
+                              } else if (!hasAnyShortage) {
                                 console.log(`[renderButton] requestId: ${request.id} - Показываем кнопку Назначить наряд`);
                                 return (
                                   <button
@@ -2124,7 +2155,7 @@ const RequestsAdmin: React.FC = () => {
                                   </button>
                                 );
                               } else {
-                                console.log(`[renderButton] requestId: ${request.id} - Скрываем кнопку (hasAnyShortage = true)`);
+                                console.log(`[renderButton] requestId: ${request.id} - Скрываем кнопку (есть дефицит запчастей)`);
                                 return null;
                               }
                             })()}
